@@ -1,22 +1,18 @@
-import React from 'react';
+import { useRouter } from 'expo-router';
 import {
-  View,
-  Text,
-  StyleSheet,
   Pressable,
-  StatusBar
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-
 export default function App() {
+  const router = useRouter();
   return (
     <View style={styles.container}>
 
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#1D0B08"
-      />
+      
 
       {/* Título */}
       <View style={styles.header}>
@@ -47,7 +43,7 @@ export default function App() {
         {/* Añadir Recordatorio */}
         <Pressable
           style={styles.boton}
-          onPress={() => console.log("Añadir Recordatorio")}
+          onPress={() => router.push("/agregarecordatorio")}
         >
           <Ionicons
             name="calendar-outline"
@@ -72,10 +68,10 @@ export default function App() {
 
 
 const styles = StyleSheet.create({
-
+  /*ColorBackGround Inicio*/
   container: {
     flex: 1,
-    backgroundColor: '#341539',
+    backgroundColor: '#000040',
     paddingTop: 40,
   },
 
