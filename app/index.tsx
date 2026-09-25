@@ -12,7 +12,6 @@ export default function App() {
   return (
     <View style={styles.container}>
 
-      
 
       {/* Título */}
       <View style={styles.header}>
