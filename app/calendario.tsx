@@ -3,35 +3,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert, FlatList, Modal, ScrollView, StyleSheet,
+  Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const MESES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
-
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const ANIOS = Array.from({ length: 21 }, (_, i) => new Date(2026, 9, 25).getFullYear() - 10 + i);
+const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTOS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
-const anioActualSistema = new Date(2026, 9, 25).getFullYear();
-const ANIOS = Array.from({ length: 21 }, (_, index) => anioActualSistema - 10 + index);
-
-const HORAS = Array.from({ length: 24 }, (_, i) => (i < 10 ? `0${i}` : `${i}`));
-const MINUTOS = Array.from({ length: 60 }, (_, i) => (i < 10 ? `0${i}` : `${i}`));
-
-interface EventoCalendario {
+interface Evento {
   id: string;
   nombre: string;
   hora: string;
+  repiteSiempre: boolean;
   repiteSemanal: boolean;
   repiteMensual: boolean;
   dia: number;
@@ -41,218 +28,105 @@ interface EventoCalendario {
 
 export default function CalendarioScreen() {
   const router = useRouter();
+  const hoy = new Date(2026, 9, 25);
   
-  const fechaActual = new Date(2026, 9, 25); 
-  const [mesActual, setMesActual] = useState(fechaActual.getMonth());
-  const [anioActual, setAnioActual] = useState(fechaActual.getFullYear());
-  const [diaSeleccionado, setDiaSeleccionado] = useState(fechaActual.getDate());
+  const [mes, setMes] = useState(hoy.getMonth());
+  const [anio, setAnio] = useState(hoy.getFullYear());
+  const [diaSel, setDiaSel] = useState(hoy.getDate());
+  const [eventos, setEventos] = useState<Evento[]>([]);
 
-  // Modales
-  const [modalMesVisible, setModalMesVisible] = useState(false);
-  const [modalAnioVisible, setModalAnioVisible] = useState(false);
-  const [modalHoraVisible, setModalHoraVisible] = useState(false);
-  const [modalMinutoVisible, setModalMinutoVisible] = useState(false);
-  const [modalNuevoEventoVisible, setModalNuevoEventoVisible] = useState(false);
-
-  // Campos del formulario
-  const [nombreEvento, setNombreEvento] = useState('');
-  const [horaSeleccionada, setHoraSeleccionada] = useState('12');
-  const [minutoSeleccionado, setMinutoSeleccionado] = useState('00');
-  const [repiteSemanal, setRepiteSemanal] = useState(false);
-  const [repiteMensual, setRepiteMensual] = useState(false);
-
-  const [eventos, setEventos] = useState<EventoCalendario[]>([]);
+  const [modal, setModal] = useState<string | null>(null);
+  const [nombre, setNombre] = useState('');
+  const [hora, setHora] = useState('12');
+  const [minuto, setMinuto] = useState('00');
+  const [repSiemp, setRepSiemp] = useState(false);
+  const [repSem, setRepSem] = useState(false);
+  const [repMen, setRepMen] = useState(false);
 
   useEffect(() => {
-    cargarEventos();
+    AsyncStorage.getItem('@eventos_calendario').then(d => d && setEventos(JSON.parse(d)));
   }, []);
 
-  const cargarEventos = async () => {
-    try {
-      const datos = await AsyncStorage.getItem('@eventos_calendario');
-      if (datos !== null) {
-        setEventos(JSON.parse(datos));
-      }
-    } catch (error) {
-      console.log('Error al cargar eventos:', error);
-    }
+  const guardarEventos = async (nuevos: Evento[]) => {
+    setEventos(nuevos);
+    await AsyncStorage.setItem('@eventos_calendario', JSON.stringify(nuevos));
   };
 
-  const guardarNuevoEvento = async () => {
-    if (!nombreEvento.trim()) {
-      Alert.alert('Error', 'Por favor ingresa el nombre del evento.');
-      return;
-    }
-
-    const horaFormateada = `${horaSeleccionada}:${minutoSeleccionado}`;
-
-    const nuevoEvento: EventoCalendario = {
-      id: Date.now().toString(),
-      nombre: nombreEvento,
-      hora: horaFormateada,
-      repiteSemanal,
-      repiteMensual,
-      dia: diaSeleccionado,
-      mes: mesActual,
-      anio: anioActual,
+  const agregarEvento = () => {
+    if (!nombre.trim()) return Alert.alert('Error', 'Ingresa el nombre.');
+    const nuevo: Evento = {
+      id: Date.now().toString(), nombre, hora: `${hora}:${minuto}`,
+      repiteSiempre: repSiemp, repiteSemanal: repSem, repiteMensual: repMen,
+      dia: diaSel, mes, anio
     };
-
-    const nuevosEventos = [...eventos, nuevoEvento];
-    setEventos(nuevosEventos);
-
-    try {
-      await AsyncStorage.setItem('@eventos_calendario', JSON.stringify(nuevosEventos));
-      setNombreEvento('');
-      setHoraSeleccionada('12');
-      setMinutoSeleccionado('00');
-      setRepiteSemanal(false);
-      setRepiteMensual(false);
-      setModalNuevoEventoVisible(false);
-    } catch (error) {
-      console.log('Error al guardar evento:', error);
-    }
+    guardarEventos([...eventos, nuevo]);
+    setNombre(''); setRepSiemp(false); setRepSem(false); setRepMen(false); setModal(null);
   };
 
-  const eliminarEvento = async (id: string) => {
-    const nuevosEventos = eventos.filter((ev) => ev.id !== id);
-    setEventos(nuevosEventos);
-    try {
-      await AsyncStorage.setItem('@eventos_calendario', JSON.stringify(nuevosEventos));
-    } catch (error) {
-      console.log('Error al eliminar evento:', error);
+  const eliminarEvento = (id: string) => guardarEventos(eventos.filter(e => e.id !== id));
+
+  const aplicaFecha = (e: Evento, d: number, m: number, a: number) => {
+    const fCreada = new Date(e.anio, e.mes, e.dia);
+    const fEval = new Date(a, m, d);
+    if (fEval < fCreada) return false;
+    if (e.repiteSiempre) return true;
+    if (e.dia === d && e.mes === m && e.anio === a) return true;
+    if (e.repiteSemanal && fEval.getDay() === fCreada.getDay()) {
+      return e.repiteMensual || (m === e.mes && a === e.anio);
     }
+    return e.repiteMensual && !e.repiteSemanal && e.dia === d;
   };
 
-  // Lógica precisa para verificar si un evento debe aparecer en una fecha determinada
-  const eventoAplicaEnFecha = (ev: EventoCalendario, diaCheck: number, mesCheck: number, anioCheck: number) => {
-    const fechaCreada = new Date(ev.anio, ev.mes, ev.dia);
-    const fechaEvaluada = new Date(anioCheck, mesCheck, diaCheck);
+  const eventosDelDia = eventos.filter(e => aplicaFecha(e, diaSel, mes, anio));
 
-    // No mostrar si la fecha es anterior a la creación del evento
-    if (fechaEvaluada < fechaCreada) return false;
+  const diasMes = (() => {
+    const primerDia = (new Date(anio, mes, 1).getDay() + 6) % 7;
+    const total = new Date(anio, mes + 1, 0).getDate();
+    return [...Array(primerDia).fill(null), ...Array.from({ length: total }, (_, i) => i + 1)];
+  })();
 
-    // 1. Coincidencia Exacta
-    if (ev.dia === diaCheck && ev.mes === mesCheck && ev.anio === anioCheck) {
-      return true;
-    }
-
-    // 2. Si repite Semanalmente
-    if (ev.repiteSemanal) {
-      const mismoDiaSemana = fechaEvaluada.getDay() === fechaCreada.getDay();
-
-      if (mismoDiaSemana) {
-        // Si NO activa repetición mensual, se repite solo en el mes en que se creó
-        if (!ev.repiteMensual) {
-          if (mesCheck === ev.mes && anioCheck === ev.anio) {
-            return true;
-          }
-        } else {
-          // Si activa Semanal + Mensual, se repite en todos los meses siguientes el mismo día de la semana
-          return true;
-        }
-      }
-    }
-
-    // 3. Si repite Mensualmente (únicamente sin repetición semanal)
-    if (ev.repiteMensual && !ev.repiteSemanal) {
-      if (ev.dia === diaCheck) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  const obtenerEventoParaDia = (dia: number | null) => {
-    if (dia === null) return null;
-    return eventos.find((ev) => eventoAplicaEnFecha(ev, dia, mesActual, anioActual));
-  };
-
-  const eventosDelDia = eventos.filter((ev) => eventoAplicaEnFecha(ev, diaSeleccionado, mesActual, anioActual));
-
-  const obtenerDiasDelMes = (mes: number, anio: number) => {
-    const primerDiaDelMes = new Date(anio, mes, 1).getDay();
-    const primerDiaAjustado = primerDiaDelMes === 0 ? 6 : primerDiaDelMes - 1;
-    const totalDias = new Date(anio, mes + 1, 0).getDate();
-    const dias = [];
-
-    for (let i = 0; i < primerDiaAjustado; i++) {
-      dias.push(null);
-    }
-    for (let dia = 1; dia <= totalDias; dia++) {
-      dias.push(dia);
-    }
-    return dias;
-  };
-
-  const diasDelMes = obtenerDiasDelMes(mesActual, anioActual);
+  const renderModalSelector = (tipo: string, titulo: string, data: any[], onSelect: (val: any) => void, fmt = (v: any) => v) => (
+    <Modal visible={modal === tipo} transparent animationType="fade" onRequestClose={() => setModal('nuevo')}>
+      <View style={s.overlay}>
+        <View style={[s.content, { maxHeight: '50%' }]}>
+          <Text style={s.modalTitle}>{titulo}</Text>
+          <FlatList data={data} keyExtractor={(i, idx) => idx.toString()} renderItem={({ item }) => (
+            <TouchableOpacity style={s.item} onPress={() => { onSelect(item); setModal('nuevo'); }}>
+              <Text style={s.itemText}>{fmt(item)}</Text>
+            </TouchableOpacity>
+          )} />
+          <TouchableOpacity style={s.closeBtn} onPress={() => setModal('nuevo')}><Text style={s.closeText}>Cancelar</Text></TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* ENCABEZADO */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.botonVolver}>
-          <Ionicons name="arrow-back" size={24} color="#F8E9E9" />
-        </TouchableOpacity>
-        <Text style={styles.titulo}>Calendario</Text>
-        <View style={{ width: 24 }} />
+    <SafeAreaView style={s.container}>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#F8E9E9" /></TouchableOpacity>
+        <Text style={s.title}>Calendario</Text>
+        <TouchableOpacity onPress={() => setModal('lista')}><Ionicons name="list" size={24} color="#F8E9E9" /></TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
-        {/* SELECTORES DE MES Y AÑO */}
-        <View style={styles.contenedorSelectores}>
-          <TouchableOpacity style={styles.botonSelector} onPress={() => setModalMesVisible(true)}>
-            <Text style={styles.textoSelector}>{MESES[mesActual]}</Text>
-            <Ionicons name="chevron-down" size={18} color="#F8E9E9" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.botonSelector} onPress={() => setModalAnioVisible(true)}>
-            <Text style={styles.textoSelector}>{anioActual}</Text>
-            <Ionicons name="chevron-down" size={18} color="#F8E9E9" />
-          </TouchableOpacity>
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        <View style={s.selectors}>
+          <TouchableOpacity style={s.selBtn} onPress={() => setModal('mes')}><Text style={s.selText}>{MESES[mes]}</Text><Ionicons name="chevron-down" size={18} color="#F8E9E9" /></TouchableOpacity>
+          <TouchableOpacity style={s.selBtn} onPress={() => setModal('anio')}><Text style={s.selText}>{anio}</Text><Ionicons name="chevron-down" size={18} color="#F8E9E9" /></TouchableOpacity>
         </View>
 
-        {/* DÍAS DE LA SEMANA */}
-        <View style={styles.gridDiasSemana}>
-          {DIAS_SEMANA.map((dia, index) => (
-            <Text key={index} style={styles.textoDiaSemana}>{dia}</Text>
-          ))}
-        </View>
+        <View style={s.row}>{DIAS_SEMANA.map((d, i) => <Text key={i} style={s.weekDay}>{d}</Text>)}</View>
 
-        {/* GRILLA DE DÍAS */}
-        <View style={styles.gridDias}>
-          {diasDelMes.map((dia, index) => {
-            const esSeleccionado = dia === diaSeleccionado;
-            const eventoEnDia = obtenerEventoParaDia(dia);
-
+        <View style={s.grid}>
+          {diasMes.map((d, i) => {
+            const ev = d ? eventos.find(e => aplicaFecha(e, d, mes, anio)) : null;
+            const sel = d === diaSel;
             return (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.celdaDia,
-                  dia === null && styles.celdaVacia,
-                  esSeleccionado && styles.celdaSeleccionada,
-                  eventoEnDia !== null && styles.celdaConEvento
-                ]}
-                disabled={dia === null}
-                onPress={() => dia && setDiaSeleccionado(dia)}
-              >
-                {dia !== null && (
-                  <View style={styles.contenedorTextoDia}>
-                    <Text style={[styles.textoDia, (esSeleccionado || eventoEnDia !== null) && styles.textoDiaSeleccionado]}>
-                      {dia}
-                    </Text>
-                    {eventoEnDia && (
-                      <View style={styles.infoMiniEventoContainer}>
-                        <Text style={styles.miniNombreEvento} numberOfLines={1}>
-                          {eventoEnDia.nombre}
-                        </Text>
-                        <Text style={styles.miniHoraEvento}>
-                          {eventoEnDia.hora}
-                        </Text>
-                      </View>
-                    )}
+              <TouchableOpacity key={i} style={[s.cell, !d && s.empty, sel && s.selCell, ev && s.hasEv]} disabled={!d} onPress={() => d && setDiaSel(d)}>
+                {d && (
+                  <View style={{ alignItems: 'center', width: '100%' }}>
+                    <Text style={[s.dayText, (sel || ev) && s.selDayText]}>{d}</Text>
+                    {ev && <Text style={s.miniEv} numberOfLines={1}>{ev.nombre}</Text>}
                   </View>
                 )}
               </TouchableOpacity>
@@ -260,293 +134,123 @@ export default function CalendarioScreen() {
           })}
         </View>
 
-        {/* ZONA DE EVENTOS DEL DÍA SELECCIONADO */}
-        <View style={styles.zonaEventos}>
-          <View style={styles.cabeceraZonaEventos}>
-            <Text style={styles.tituloEventos}>
-              Eventos del {diaSeleccionado} de {MESES[mesActual]}
-            </Text>
-            <TouchableOpacity 
-              style={styles.botonAgregarEvento} 
-              onPress={() => setModalNuevoEventoVisible(true)}
-            >
-              <Ionicons name="add" size={20} color="#FFFFFF" />
-              <Text style={styles.textoBotonAgregar}>Añadir</Text>
-            </TouchableOpacity>
+        <View style={{ marginTop: 20 }}>
+          <View style={s.evHeader}>
+            <Text style={s.evTitle}>Eventos del {diaSel} de {MESES[mes]}</Text>
+            <TouchableOpacity style={s.addBtn} onPress={() => setModal('nuevo')}><Ionicons name="add" size={20} color="#FFF" /><Text style={{ color: '#FFF', marginLeft: 4 }}>Añadir</Text></TouchableOpacity>
           </View>
-
           {eventosDelDia.length === 0 ? (
-            <View style={styles.tarjetaEventoVacia}>
-              <Ionicons name="calendar-outline" size={30} color="#0080ff" />
-              <Text style={styles.textoSinEventos}>No hay eventos programados para este día.</Text>
-            </View>
+            <View style={s.card}><Ionicons name="calendar-outline" size={24} color="#006EDB" /><Text style={{ color: '#F8E9E9', marginLeft: 10 }}>Sin eventos.</Text></View>
           ) : (
-            eventosDelDia.map((ev) => (
-              <View key={ev.id} style={styles.tarjetaEvento}>
-                <View style={styles.infoEvento}>
-                  <Text style={styles.nombreEventoText}>{ev.nombre}</Text>
-                  <Text style={styles.horaEventoText}>
-                    🕒 {ev.hora} {ev.repiteSemanal ? '• (Semanal)' : ''} {ev.repiteMensual ? '• (Mensual)' : ''}
-                  </Text>
+            eventosDelDia.map(e => (
+              <View key={e.id} style={s.cardEv}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#F8E9E9', fontSize: 16, fontWeight: '500' }}>{e.nombre}</Text>
+                  <Text style={{ color: '#aaa', fontSize: 13, marginTop: 2 }}>🕒 {e.hora} {e.repiteSiempre ? '• Siempre' : e.repiteSemanal ? '• Semanal' : e.repiteMensual ? '• Mensual' : ''}</Text>
                 </View>
-                <TouchableOpacity onPress={() => eliminarEvento(ev.id)} style={styles.botonEliminarEvento}>
-                  <Ionicons name="trash-outline" size={20} color="#ff4444" />
-                </TouchableOpacity>
+                <TouchableOpacity onPress={() => eliminarEvento(e.id)}><Ionicons name="trash-outline" size={20} color="#ff4444" /></TouchableOpacity>
               </View>
             ))
           )}
         </View>
-
       </ScrollView>
 
-      {/* MODAL NUEVO EVENTO */}
-      <Modal visible={modalNuevoEventoVisible} transparent={true} animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContenido}>
-            <Text style={styles.modalTitulo}>Nuevo Evento ({diaSeleccionado} de {MESES[mesActual]})</Text>
-            
-            <Text style={styles.labelInput}>Nombre del evento:</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ej. Reunión, Cita..."
-              placeholderTextColor="#888"
-              value={nombreEvento}
-              onChangeText={setNombreEvento}
-            />
+      <Modal visible={modal === 'nuevo'} transparent animationType="slide" onRequestClose={() => setModal(null)}>
+        <View style={s.overlay}>
+          <View style={[s.content, { maxHeight: '90%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={s.modalTitle}>Nuevo Evento ({diaSel} de {MESES[mes]})</Text>
+              <Text style={s.label}>Nombre:</Text>
+              <TextInput style={s.input} placeholder="Ej. Reunión" placeholderTextColor="#888" value={nombre} onChangeText={setNombre} />
+              
+              <Text style={s.label}>Hora:</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <TouchableOpacity style={[s.timeBtn, { flex: 1, marginRight: 8 }]} onPress={() => setModal('hora')}><Text style={{ color: '#F8E9E9' }}>{hora}</Text></TouchableOpacity>
+                <TouchableOpacity style={[s.timeBtn, { flex: 1, marginLeft: 8 }]} onPress={() => setModal('minuto')}><Text style={{ color: '#F8E9E9' }}>{minuto}</Text></TouchableOpacity>
+              </View>
 
-            <Text style={styles.labelInput}>Hora:</Text>
-            <View style={styles.contenedorFilaHoras}>
-              <TouchableOpacity 
-                style={[styles.inputSelectorHora, { flex: 1, marginRight: 8 }]} 
-                onPress={() => setModalHoraVisible(true)}
-              >
-                <Text style={styles.textoHoraSeleccionada}>Hr: {horaSeleccionada}</Text>
-                <Ionicons name="chevron-down" size={16} color="#F8E9E9" />
-              </TouchableOpacity>
+              {[['Siempre', repSiemp, setRepSiemp], ['Semanal', repSem, setRepSem], ['Mensual', repMen, setRepMen]].map(([label, val, set]: any, idx) => (
+                <View key={idx}>
+                  <Text style={s.label}>¿Repetir {label.toLowerCase()}?</Text>
+                  <View style={{ flexDirection: 'row' }}>
+                    <TouchableOpacity style={[s.repBtn, val && s.repAct]} onPress={() => set(true)}><Text style={s.repText}>Sí</Text></TouchableOpacity>
+                    <TouchableOpacity style={[s.repBtn, !val && s.repAct]} onPress={() => set(false)}><Text style={s.repText}>No</Text></TouchableOpacity>
+                  </View>
+                </View>
+              ))}
 
-              <TouchableOpacity 
-                style={[styles.inputSelectorHora, { flex: 1, marginLeft: 8 }]} 
-                onPress={() => setModalMinutoVisible(true)}
-              >
-                <Text style={styles.textoHoraSeleccionada}>Min: {minutoSeleccionado}</Text>
-                <Ionicons name="chevron-down" size={16} color="#F8E9E9" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Repetir Semanalmente */}
-            <Text style={styles.labelInput}>¿Repetir semanalmente?</Text>
-            <View style={styles.contenedorOpcionesRepeticion}>
-              <TouchableOpacity 
-                style={[styles.botonOpcionRepeticion, repiteSemanal && styles.opcionSeleccionada]}
-                onPress={() => setRepiteSemanal(true)}
-              >
-                <Text style={styles.textoOpcionRepeticion}>Sí</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.botonOpcionRepeticion, !repiteSemanal && styles.opcionSeleccionada]}
-                onPress={() => setRepiteSemanal(false)}
-              >
-                <Text style={styles.textoOpcionRepeticion}>No</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Repetir Mensualmente */}
-            <Text style={styles.labelInput}>¿Repetir mensualmente?</Text>
-            <View style={styles.contenedorOpcionesRepeticion}>
-              <TouchableOpacity 
-                style={[styles.botonOpcionRepeticion, repiteMensual && styles.opcionSeleccionada]}
-                onPress={() => setRepiteMensual(true)}
-              >
-                <Text style={styles.textoOpcionRepeticion}>Sí</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.botonOpcionRepeticion, !repiteMensual && styles.opcionSeleccionada]}
-                onPress={() => setRepiteMensual(false)}
-              >
-                <Text style={styles.textoOpcionRepeticion}>No</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.botonesModalContainer}>
-              <TouchableOpacity 
-                style={[styles.botonModalAccion, { backgroundColor: '#493936' }]} 
-                onPress={() => setModalNuevoEventoVisible(false)}
-              >
-                <Text style={styles.textoBotonModal}>Cancelar</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[styles.botonModalAccion, { backgroundColor: '#0080ff' }]} 
-                onPress={guardarNuevoEvento}
-              >
-                <Text style={styles.textoBotonModal}>Guardar</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={{ flexDirection: 'row', marginTop: 20 }}>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#493936' }]} onPress={() => setModal(null)}><Text style={{ color: '#F8E9E9' }}>Cancelar</Text></TouchableOpacity>
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#006EDB' }]} onPress={agregarEvento}><Text style={{ color: '#F8E9E9' }}>Guardar</Text></TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* MODAL DESPLEGABLE HORA */}
-      <Modal visible={modalHoraVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContenido, { maxHeight: '50%' }]}>
-            <Text style={styles.modalTitulo}>Selecciona la Hora</Text>
-            <FlatList
-              data={HORAS}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => { setHoraSeleccionada(item); setModalHoraVisible(false); }}
-                >
-                  <Text style={[styles.modalTextoItem, item === horaSeleccionada && styles.modalTextoSeleccionado]}>
-                    {item} hrs
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-            <TouchableOpacity style={styles.modalBotonCerrar} onPress={() => setModalHoraVisible(false)}>
-              <Text style={styles.modalTextoCerrar}>Cancelar</Text>
-            </TouchableOpacity>
+      <Modal visible={modal === 'lista'} transparent animationType="slide" onRequestClose={() => setModal(null)}>
+        <View style={s.overlay}>
+          <View style={[s.content, { maxHeight: '85%' }]}>
+            <Text style={s.modalTitle}>Todos los Eventos</Text>
+            {eventos.length === 0 ? <Text style={{ color: '#F8E9E9', textAlign: 'center', margin: 20 }}>No hay eventos.</Text> : (
+              <FlatList data={eventos} keyExtractor={i => i.id} renderItem={({ item }) => (
+                <View style={s.cardEv}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#F8E9E9', fontWeight: '500' }}>{item.nombre}</Text>
+                    <Text style={{ color: '#aaa', fontSize: 12 }}>{item.dia} de {MESES[item.mes]} {item.anio} - {item.hora}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => eliminarEvento(item.id)}><Ionicons name="trash-outline" size={20} color="#ff4444" /></TouchableOpacity>
+                </View>
+              )} />
+            )}
+            <TouchableOpacity style={s.closeBtn} onPress={() => setModal(null)}><Text style={s.closeText}>Cerrar</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* MODAL DESPLEGABLE MINUTO */}
-      <Modal visible={modalMinutoVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContenido, { maxHeight: '50%' }]}>
-            <Text style={styles.modalTitulo}>Selecciona el Minuto</Text>
-            <FlatList
-              data={MINUTOS}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => { setMinutoSeleccionado(item); setModalMinutoVisible(false); }}
-                >
-                  <Text style={[styles.modalTextoItem, item === minutoSeleccionado && styles.modalTextoSeleccionado]}>
-                    {item} min
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-            <TouchableOpacity style={styles.modalBotonCerrar} onPress={() => setModalMinutoVisible(false)}>
-              <Text style={styles.modalTextoCerrar}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL MES */}
-      <Modal visible={modalMesVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContenido, { maxHeight: '60%' }]}>
-            <Text style={styles.modalTitulo}>Selecciona un Mes</Text>
-            <FlatList
-              data={MESES}
-              keyExtractor={(_, index) => index.toString()}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => { setMesActual(index); setModalMesVisible(false); }}
-                >
-                  <Text style={[styles.modalTextoItem, index === mesActual && styles.modalTextoSeleccionado]}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-            <TouchableOpacity style={styles.modalBotonCerrar} onPress={() => setModalMesVisible(false)}>
-              <Text style={styles.modalTextoCerrar}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL AÑO CORREGIDO (Lista con Scroll limpia) */}
-      <Modal visible={modalAnioVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContenido, { maxHeight: '50%' }]}>
-            <Text style={styles.modalTitulo}>Selecciona un Año</Text>
-            <FlatList
-              data={ANIOS}
-              keyExtractor={(item) => item.toString()}
-              showsVerticalScrollIndicator={true}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => { setAnioActual(item); setModalAnioVisible(false); }}
-                >
-                  <Text style={[styles.modalTextoItem, item === anioActual && styles.modalTextoSeleccionado]}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-            <TouchableOpacity style={styles.modalBotonCerrar} onPress={() => setModalAnioVisible(false)}>
-              <Text style={styles.modalTextoCerrar}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
+      {renderModalSelector('mes', 'Selecciona un Mes', MESES, (i) => setMes(MESES.indexOf(i)))}
+      {renderModalSelector('anio', 'Selecciona un Año', ANIOS, setAnio)}
+      {renderModalSelector('hora', 'Selecciona la Hora', HORAS, setHora, h => `${h} hrs`)}
+      {renderModalSelector('minuto', 'Selecciona el Minuto', MINUTOS, setMinuto, m => `${m} min`)}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000040' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 60 },
-  botonVolver: { padding: 8 },
-  titulo: { color: '#F8E9E9', fontSize: 24, fontWeight: '400' },
-  scrollContainer: { paddingBottom: 30, paddingHorizontal: 16 },
-  contenedorSelectores: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 15 },
-  botonSelector: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0c0c5a', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginHorizontal: 4 },
-  textoSelector: { color: '#F8E9E9', fontSize: 16, fontWeight: '500' },
-  gridDiasSemana: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
-  textoDiaSemana: { color: '#F8E9E9', fontSize: 14, fontWeight: 'bold', width: '14%', textAlign: 'center' },
-  gridDias: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', backgroundColor: '#0c0c5a', borderRadius: 14, padding: 10 },
-  celdaDia: { width: '14.28%', height: 65, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 6, marginBottom: 6 },
-  celdaVacia: { backgroundColor: 'transparent' },
-  celdaSeleccionada: { backgroundColor: '#1a1a8c', borderRadius: 8 },
-  celdaConEvento: { backgroundColor: '#141452', borderRadius: 8, borderWidth: 1, borderColor: '#0080ff' },
-  contenedorTextoDia: { alignItems: 'center', width: '100%' },
-  textoDia: { color: '#F8E9E9', fontSize: 14 },
-  textoDiaSeleccionado: { fontWeight: 'bold', color: '#FFFFFF' },
-  infoMiniEventoContainer: { width: '100%', paddingHorizontal: 2, alignItems: 'center', marginTop: 2 },
-  miniNombreEvento: { color: '#b3d1ff', fontSize: 9, textAlign: 'center' },
-  miniHoraEvento: { color: '#80bfff', fontSize: 8, textAlign: 'center' },
-  zonaEventos: { marginTop: 20 },
-  cabeceraZonaEventos: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  tituloEventos: { color: '#F8E9E9', fontSize: 16 },
-  botonAgregarEvento: { flexDirection: 'row', backgroundColor: '#0080ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
-  textoBotonAgregar: { color: '#FFFFFF', marginLeft: 4, fontWeight: '500' },
-  tarjetaEventoVacia: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0c0c5a', padding: 16, borderRadius: 14 },
-  textoSinEventos: { color: '#F8E9E9', fontSize: 14, marginLeft: 12, flex: 1 },
-  tarjetaEvento: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0c0c5a', padding: 14, borderRadius: 14, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#0080ff' },
-  infoEvento: { flex: 1 },
-  nombreEventoText: { color: '#F8E9E9', fontSize: 16, fontWeight: '500' },
-  horaEventoText: { color: '#aaa', fontSize: 13, marginTop: 4 },
-  botonEliminarEvento: { padding: 4 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center' },
-  modalContenido: { width: '85%', maxHeight: '80%', backgroundColor: '#0c0c5a', borderRadius: 16, padding: 20 },
-  modalTitulo: { color: '#F8E9E9', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
-  labelInput: { color: '#F8E9E9', fontSize: 14, marginBottom: 6, marginTop: 10 },
+  title: { color: '#F8E9E9', fontSize: 24 },
+  scroll: { paddingBottom: 30, paddingHorizontal: 16 },
+  selectors: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 15 },
+  selBtn: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0c0c5a', borderRadius: 12, padding: 14, marginHorizontal: 4 },
+  selText: { color: '#F8E9E9', fontSize: 16 },
+  row: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
+  weekDay: { color: '#F8E9E9', fontSize: 14, fontWeight: 'bold', width: '14%', textAlign: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: '#0c0c5a', borderRadius: 14, padding: 10 },
+  cell: { width: '14.28%', height: 65, alignItems: 'center', paddingTop: 6, marginBottom: 6 },
+  empty: { backgroundColor: 'transparent' },
+  selCell: { backgroundColor: '#1a1a8c', borderRadius: 8 },
+  hasEv: { backgroundColor: '#141452', borderRadius: 8, borderWidth: 1, borderColor: '#006EDB' },
+  dayText: { color: '#F8E9E9', fontSize: 14 },
+  selDayText: { fontWeight: 'bold', color: '#FFF' },
+  miniEv: { color: '#80bfff', fontSize: 9, textAlign: 'center', marginTop: 2 },
+  evHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  evTitle: { color: '#F8E9E9', fontSize: 16 },
+  addBtn: { flexDirection: 'row', backgroundColor: '#006EDB', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
+  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0c0c5a', padding: 16, borderRadius: 14 },
+  cardEv: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0c0c5a', padding: 14, borderRadius: 14, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#006EDB' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  content: { width: '85%', backgroundColor: '#0c0c5a', borderRadius: 16, padding: 20 },
+  modalTitle: { color: '#F8E9E9', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
+  label: { color: '#F8E9E9', fontSize: 14, marginTop: 10, marginBottom: 4 },
   input: { backgroundColor: '#1a1a7a', color: '#F8E9E9', padding: 12, borderRadius: 8, fontSize: 16 },
-  contenedorFilaHoras: { flexDirection: 'row', justifyContent: 'space-between' },
-  inputSelectorHora: { backgroundColor: '#1a1a7a', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8 },
-  textoHoraSeleccionada: { color: '#F8E9E9', fontSize: 15 },
-  contenedorOpcionesRepeticion: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  botonOpcionRepeticion: { flex: 1, backgroundColor: '#493936', paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginHorizontal: 3 },
-  opcionSeleccionada: { backgroundColor: '#0080ff' },
-  textoOpcionRepeticion: { color: '#F8E9E9', fontSize: 13, fontWeight: 'bold' },
-  botonesModalContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
-  botonModalAccion: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginHorizontal: 5 },
-  textoBotonModal: { color: '#F8E9E9', fontSize: 16, fontWeight: '500' },
-  modalItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1a7a', alignItems: 'center' },
-  modalTextoItem: { color: '#F8E9E9', fontSize: 16 },
-  modalTextoSeleccionado: { color: '#0080ff', fontWeight: 'bold' },
-  modalBotonCerrar: { marginTop: 15, backgroundColor: '#493936', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  modalTextoCerrar: { color: '#F8E9E9', fontSize: 16, fontWeight: '500' },
+  timeBtn: { backgroundColor: '#1a1a7a', padding: 12, borderRadius: 8, alignItems: 'center' },
+  repBtn: { flex: 1, backgroundColor: '#493936', paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginHorizontal: 3 },
+  repAct: { backgroundColor: '#006EDB' },
+  repText: { color: '#F8E9E9', fontSize: 13, fontWeight: 'bold' },
+  actionBtn: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginHorizontal: 5 },
+  item: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1a7a', alignItems: 'center' },
+  itemText: { color: '#F8E9E9', fontSize: 16 },
+  closeBtn: { marginTop: 15, backgroundColor: '#493936', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  closeText: { color: '#F8E9E9', fontSize: 16 },
 });
