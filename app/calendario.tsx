@@ -1,3 +1,7 @@
+// ==========================================
+// SECCIÓN DE IMPORTS
+// ==========================================
+
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -8,11 +12,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+// ==========================================
+// CONSTANTES DE FECHA Y HORA
+// ==========================================
+
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const ANIOS = Array.from({ length: 21 }, (_, i) => new Date(2026, 9, 25).getFullYear() - 10 + i);
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTOS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+// ==========================================
+// ESTRUCTURA DE UN EVENTO DEL CALENDARIO
+// ==========================================
 
 interface Evento {
   id: string;
@@ -29,11 +41,19 @@ interface Evento {
 export default function CalendarioScreen() {
   const router = useRouter();
   const hoy = new Date(2026, 9, 25);
-  
+
+  // ==========================================
+  // ESTADOS DE FECHA Y LISTA DE EVENTOS
+  // ==========================================
+
   const [mes, setMes] = useState(hoy.getMonth());
   const [anio, setAnio] = useState(hoy.getFullYear());
   const [diaSel, setDiaSel] = useState(hoy.getDate());
   const [eventos, setEventos] = useState<Evento[]>([]);
+
+  // ==========================================
+  // ESTADOS DE MODALES Y FORMULARIO
+  // ==========================================
 
   const [modal, setModal] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
@@ -43,14 +63,26 @@ export default function CalendarioScreen() {
   const [repSem, setRepSem] = useState(false);
   const [repMen, setRepMen] = useState(false);
 
+  // ==========================================
+  // CARGAR EVENTOS GUARDADOS EN MEMORIA
+  // ==========================================
+
   useEffect(() => {
     AsyncStorage.getItem('@eventos_calendario').then(d => d && setEventos(JSON.parse(d)));
   }, []);
+
+  // ==========================================
+  // GUARDAR EVENTOS EN ASYNCSTORAGE
+  // ==========================================
 
   const guardarEventos = async (nuevos: Evento[]) => {
     setEventos(nuevos);
     await AsyncStorage.setItem('@eventos_calendario', JSON.stringify(nuevos));
   };
+
+  // ==========================================
+  // CREAR UN NUEVO EVENTO
+  // ==========================================
 
   const agregarEvento = () => {
     if (!nombre.trim()) return Alert.alert('Error', 'Ingresa el nombre.');
@@ -63,7 +95,17 @@ export default function CalendarioScreen() {
     setNombre(''); setRepSiemp(false); setRepSem(false); setRepMen(false); setModal(null);
   };
 
+  // ==========================================
+  // ELIMINAR UN EVENTO POR ID
+  // ==========================================
+
   const eliminarEvento = (id: string) => guardarEventos(eventos.filter(e => e.id !== id));
+
+  // ==========================================
+  // COMPROBAR SI UN EVENTO APLICA EN UNA FECHA
+  // ==========================================
+  // Evalúa coincidencia exacta o repeticiones
+  // configuradas (siempre, semanal o mensual).
 
   const aplicaFecha = (e: Evento, d: number, m: number, a: number) => {
     const fCreada = new Date(e.anio, e.mes, e.dia);
@@ -77,13 +119,23 @@ export default function CalendarioScreen() {
     return e.repiteMensual && !e.repiteSemanal && e.dia === d;
   };
 
+  // Eventos que corresponden al día seleccionado
   const eventosDelDia = eventos.filter(e => aplicaFecha(e, diaSel, mes, anio));
+
+  // ==========================================
+  // CALCULAR DÍAS DEL MES ACTUAL
+  // ==========================================
 
   const diasMes = (() => {
     const primerDia = (new Date(anio, mes, 1).getDay() + 6) % 7;
     const total = new Date(anio, mes + 1, 0).getDate();
     return [...Array(primerDia).fill(null), ...Array.from({ length: total }, (_, i) => i + 1)];
   })();
+
+  // ==========================================
+  // MODAL SELECTOR REUTILIZABLE
+  // ==========================================
+  // Se utiliza para seleccionar mes, año, hora y minuto.
 
   const renderModalSelector = (tipo: string, titulo: string, data: any[], onSelect: (val: any) => void, fmt = (v: any) => v) => (
     <Modal visible={modal === tipo} transparent animationType="fade" onRequestClose={() => setModal('nuevo')}>
@@ -103,6 +155,9 @@ export default function CalendarioScreen() {
 
   return (
     <SafeAreaView style={s.container}>
+      {/* ========================================== */}
+      {/* ENCABEZADO DE LA PANTALLA */}
+      {/* ========================================== */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#F8E9E9" /></TouchableOpacity>
         <Text style={s.title}>Calendario</Text>
@@ -110,13 +165,22 @@ export default function CalendarioScreen() {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        {/* ========================================== */}
+        {/* SELECTORES DE MES Y AÑO */}
+        {/* ========================================== */}
         <View style={s.selectors}>
           <TouchableOpacity style={s.selBtn} onPress={() => setModal('mes')}><Text style={s.selText}>{MESES[mes]}</Text><Ionicons name="chevron-down" size={18} color="#F8E9E9" /></TouchableOpacity>
           <TouchableOpacity style={s.selBtn} onPress={() => setModal('anio')}><Text style={s.selText}>{anio}</Text><Ionicons name="chevron-down" size={18} color="#F8E9E9" /></TouchableOpacity>
         </View>
 
+        {/* ========================================== */}
+        {/* CABECERA DE DÍAS DE LA SEMANA */}
+        {/* ========================================== */}
         <View style={s.row}>{DIAS_SEMANA.map((d, i) => <Text key={i} style={s.weekDay}>{d}</Text>)}</View>
 
+        {/* ========================================== */}
+        {/* CUADRÍCULA DE DÍAS DEL MES */}
+        {/* ========================================== */}
         <View style={s.grid}>
           {diasMes.map((d, i) => {
             const ev = d ? eventos.find(e => aplicaFecha(e, d, mes, anio)) : null;
@@ -134,6 +198,9 @@ export default function CalendarioScreen() {
           })}
         </View>
 
+        {/* ========================================== */}
+        {/* LISTA DE EVENTOS DEL DÍA SELECCIONADO */}
+        {/* ========================================== */}
         <View style={{ marginTop: 20 }}>
           <View style={s.evHeader}>
             <Text style={s.evTitle}>Eventos del {diaSel} de {MESES[mes]}</Text>
@@ -155,6 +222,9 @@ export default function CalendarioScreen() {
         </View>
       </ScrollView>
 
+      {/* ========================================== */}
+      {/* MODAL PARA CREAR NUEVO EVENTO */}
+      {/* ========================================== */}
       <Modal visible={modal === 'nuevo'} transparent animationType="slide" onRequestClose={() => setModal(null)}>
         <View style={s.overlay}>
           <View style={[s.content, { maxHeight: '90%' }]}>
@@ -188,6 +258,9 @@ export default function CalendarioScreen() {
         </View>
       </Modal>
 
+      {/* ========================================== */}
+      {/* MODAL DE LISTA DE TODOS LOS EVENTOS */}
+      {/* ========================================== */}
       <Modal visible={modal === 'lista'} transparent animationType="slide" onRequestClose={() => setModal(null)}>
         <View style={s.overlay}>
           <View style={[s.content, { maxHeight: '85%' }]}>
@@ -208,6 +281,9 @@ export default function CalendarioScreen() {
         </View>
       </Modal>
 
+      {/* ========================================== */}
+      {/* SELECTORES DESPLEGABLES (MES, AÑO, HORA, MINUTO) */}
+      {/* ========================================== */}
       {renderModalSelector('mes', 'Selecciona un Mes', MESES, (i) => setMes(MESES.indexOf(i)))}
       {renderModalSelector('anio', 'Selecciona un Año', ANIOS, setAnio)}
       {renderModalSelector('hora', 'Selecciona la Hora', HORAS, setHora, h => `${h} hrs`)}
@@ -215,6 +291,10 @@ export default function CalendarioScreen() {
     </SafeAreaView>
   );
 }
+
+// ==========================================
+// ESTILOS DE LA PANTALLA DE CALENDARIO
+// ==========================================
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000040' },
