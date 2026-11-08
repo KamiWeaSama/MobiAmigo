@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as contacts from 'expo-contacts';
+import { Linking } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -19,6 +20,11 @@ interface AppInfo {
   packageName: string;
   icon?: string;
 }
+interface ContactInfo {
+  id: string;
+  name: string;
+  phoneNumber?: string;
+}
 
 export default function App() {
   const router = useRouter();
@@ -28,7 +34,8 @@ export default function App() {
 
   const [listaApps, setListaApps] =
     useState<AppInfo[]>([]);
-
+  const [listaContactos, setListaContactos] = useState<ContactInfo[]>([]);
+    
   useFocusEffect(
     useCallback(() => {
       const cargarRecordatoriosDeMemoria = async () => {
@@ -97,9 +104,24 @@ export default function App() {
           );
         }
       };
+      const cargarContactosDeMemoria = async () => {
 
+        try {
+          const datosGuardados = await AsyncStorage.getItem('@mis_contactos');
+          if (datosGuardados !== null) {
+            setListaContactos(JSON.parse(datosGuardados));
+          }else{
+            setListaContactos([]);
+          }
+        }catch (error) {
+          console.log ("Error al cargar contactos: ", error)
+        }
+        
+      }
+      cargarContactosDeMemoria();
       cargarRecordatoriosDeMemoria();
       cargarAppsDeMemoria();
+
     }, [])
   );
 
@@ -165,23 +187,29 @@ export default function App() {
   };
 
   const getContacts = async () => {
-    const {status} = await contacts.requestPermissionsAsync();
+    try {
+      const { status } = await contacts.requestPermissionsAsync();
 
-    if (status === 'garanted') {
-      const { data } = await contacts.getContactsAsync({
-        fields: [contacts.Fields.PhoneNumbers, contacts.Fields.Emails],
-      });
+      if (status === 'granted') {
+        // EXPLICACIÓN: Añadimos 'as any' al final para que permita usar '.contact' sin errores
+        const resultadoPicker = (await contacts.presentContactPickerAsync()) as any;
+        
+        if (resultadoPicker) {
+          const datosContacto = resultadoPicker.contact || resultadoPicker;
 
-      if (data.length > 0) {
-        const primerContacto = data[0];
-        console.log('Nombre:', primerContacto.name);
-        console.log('Telefono: ', primerContacto.PhoneNumbers[0]?.number);
+          if (datosContacto && datosContacto.id) {
+            
+            // EXPLICACIÓN: Corregimos la ortografía, usamos [0] para el primer elemento y ?.number para su valor
+            const numeroBruto = datosContacto.phoneNumbers?.[0]?.number;
+            
+            console.log('Número obtenido:', numeroBruto);
+          }
+        }
       }
-    } else {
-      console.log('No existe el permiso del usuario.');
+    } catch (error) {
+      console.log('Error:', error);
     }
-  }
-
+  };
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollGeneral} showsVerticalScrollIndicator={false}>
