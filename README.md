@@ -1,18 +1,11 @@
 # 📱 MobiAmigo — Aplicación Móvil de Asistencia y Accesibilidad en Smartphones para el Adulto Mayor
 
 **Equipo:** MoviAmigo Team  
-**Integrantes:** Pablo Gajardo · Martín Rivas · Marcelo Carrasco · Franco Constanzo · Kevin Viveros  
+**Integrantes:** Pablo Gajardo · Martín Rivas · Lucciano Parra · Franco Constanzo · Kevin Viveros  
 **Carrera:** Técnico Universitario en Informática  
 **Institución:** Universidad Técnica Federico Santa María (UTFSM)  
-**Organización Colaboradora:** Agrupación de Adultos Mayores de San Pedro de la Costa (Dirigida por la Sra. Rosita Bustos)
-
 ---
 
-## 🏢 Descripción de la Organización
-
-El proyecto se desarrolla en colaboración con una organización comunitaria de adultos mayores dirigida por la **Srta. Rosita Bustos**, con sede en el sector de **San Pedro de la Costa**, comuna de San Pedro de la Paz. Esta agrupación brinda acompañamiento, talleres formativos (manejo de correo electrónico y uso básico de aparatos electrónicos), actividades recreativas y orientación en trámites junto con la Municipalidad de San Pedro.
-
----
 
 ## 🔍 Contexto, Situación Actual y Problemas Detectados
 
@@ -70,7 +63,6 @@ Desarrollar e implementar una aplicación móvil de asistencia y accesibilidad (
 - **RF-05 — Calendario Mensual y Eventos Recurrentes:** Agendar y consultar eventos por día, mes y año con hora exacta y repetición (*Siempre*, *Semanal*, *Mensual*) ([`app/calendario.tsx`](./app/calendario.tsx)).
 - **RF-06 — Integración de Contactos Frecuentes:** Solicitar permisos y abrir el selector nativo de contactos (`expo-contacts`) desde la pantalla principal ([`app/index.tsx`](./app/index.tsx)).
 - **RF-07 — Persistencia de Datos Local:** Almacenar localmente en el dispositivo las colecciones `@mis_apps`, `@mis_recordatorios`, `@eventos_calendario` y `@mis_contactos` mediante `AsyncStorage`.
-- **RF-08 — Asistencia Guiada y Respaldo de Perfil (Proyección):** Contemplar el acompañamiento por parte de un asistente/cuidador y respaldo opcional de configuración.
 
 ### Requerimientos No Funcionales (RNF y Métricas)
 
