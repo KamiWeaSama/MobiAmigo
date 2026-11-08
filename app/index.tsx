@@ -5,22 +5,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as contacts from 'expo-contacts';
-import { Linking } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
+  Alert,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useColorScheme,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ==========================================
-// INFORMACIÓN DE LAS APLICACIONES Y CONTACTOS
+// INFORMACIÓN DE LAS APLICACIONES, CONTACTOS Y EVENTOS
 // ==========================================
 
 interface AppInfo {
@@ -35,12 +37,54 @@ interface ContactInfo {
   phoneNumber?: string;
 }
 
+interface EventoCalendario {
+  id: string;
+  nombre: string;
+  hora: string;
+  repiteSiempre: boolean;
+  repiteSemanal: boolean;
+  repiteMensual: boolean;
+  dia: number;
+  mes: number;
+  anio: number;
+}
+
+const MESES_CORTOS = [
+  'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+];
+
 export default function App() {
   const router = useRouter();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
 
-  // Lista de recordatorios
+  // ==========================================
+  // PALETA DE COLORES (MODO CLARO / OSCURO AUTOMÁTICO)
+  // ==========================================
+
+  const theme = {
+    bg: isDark ? '#0F172A' : '#FFFDF9',
+    card: isDark ? '#1E293B' : '#FFFFFF',
+    cardBorder: isDark ? '#334155' : '#D6D3CD',
+    text: isDark ? '#F8FAFC' : '#111827',
+    subtext: isDark ? '#CBD5E1' : '#4B5563',
+    sectionBg: isDark ? '#1E293B' : '#F3F0EA',
+    // Colores semánticos de botones principales
+    btnApps: '#1D4ED8',         // Azul vivo
+    btnRecordatorio: '#D97706', // Ámbar / Naranja cálido
+    btnContactos: '#15803D',    // Verde esmeralda
+    btnCalendario: '#6D28D9',   // Morado / Índigo
+    danger: '#DC2626',
+  };
+
+  // Lista de recordatorios rápidos
   const [listaRecordatorios, setListaRecordatorios] =
     useState<string[]>([]);
+
+  // Lista de eventos cercanos del calendario
+  const [eventosCercanos, setEventosCercanos] =
+    useState<EventoCalendario[]>([]);
 
   // Lista de aplicaciones seleccionadas
   const [listaApps, setListaApps] =
@@ -80,6 +124,31 @@ export default function App() {
             "Error al cargar memoria:",
             error
           );
+        }
+      };
+
+      // ==========================================
+      // CARGAR EVENTOS CERCANOS DEL CALENDARIO
+      // ==========================================
+
+      const cargarEventosDeMemoria = async () => {
+        try {
+          const datosEventos = await AsyncStorage.getItem('@eventos_calendario');
+          if (datosEventos !== null) {
+            const listaEventos: EventoCalendario[] = JSON.parse(datosEventos);
+            // Ordenar por fecha y hora más cercanas y mostrar los próximos 3
+            const ordenados = [...listaEventos].sort((a, b) => {
+              const fechaA = new Date(a.anio, a.mes, a.dia).getTime();
+              const fechaB = new Date(b.anio, b.mes, b.dia).getTime();
+              if (fechaA !== fechaB) return fechaA - fechaB;
+              return (a.hora || '').localeCompare(b.hora || '');
+            });
+            setEventosCercanos(ordenados.slice(0, 3));
+          } else {
+            setEventosCercanos([]);
+          }
+        } catch (error) {
+          console.log("Error al cargar eventos del calendario:", error);
         }
       };
 
@@ -182,6 +251,7 @@ export default function App() {
 
       cargarContactosDeMemoria();
       cargarRecordatoriosDeMemoria();
+      cargarEventosDeMemoria();
       cargarAppsDeMemoria();
     }, [])
   );
@@ -267,7 +337,7 @@ export default function App() {
   };
 
   // ==========================================
-  // OBTENER CONTACTOS DEL DISPOSITIVO
+  // OBTENER Y GUARDAR CONTACTOS DEL DISPOSITIVO
   // ==========================================
 
   const getContacts = async () => {
@@ -281,12 +351,36 @@ export default function App() {
         if (resultadoPicker) {
           const datosContacto = resultadoPicker.contact || resultadoPicker;
 
-          if (datosContacto && datosContacto.id) {
-            
+          if (datosContacto) {
             // EXPLICACIÓN: Corregimos la ortografía, usamos [0] para el primer elemento y ?.number para su valor
             const numeroBruto = datosContacto.phoneNumbers?.[0]?.number;
-            
+            const nombreContacto =
+              datosContacto.name ||
+              [datosContacto.firstName, datosContacto.lastName].filter(Boolean).join(' ') ||
+              'Contacto';
+
             console.log('Número obtenido:', numeroBruto);
+
+            if (!numeroBruto) {
+              Alert.alert('Sin número', 'El contacto seleccionado no tiene un número de teléfono.');
+              return;
+            }
+
+            const nuevoContacto: ContactInfo = {
+              id: datosContacto.id || Date.now().toString(),
+              name: nombreContacto,
+              phoneNumber: numeroBruto,
+            };
+
+            const yaExiste = listaContactos.some(
+              (c) => c.phoneNumber === nuevoContacto.phoneNumber && c.name === nuevoContacto.name
+            );
+
+            if (!yaExiste) {
+              const nuevaLista = [...listaContactos, nuevoContacto];
+              setListaContactos(nuevaLista);
+              await AsyncStorage.setItem('@mis_contactos', JSON.stringify(nuevaLista));
+            }
           }
         }
       }
@@ -295,8 +389,32 @@ export default function App() {
     }
   };
 
+  // ==========================================
+  // LLAMAR Y ELIMINAR CONTACTO
+  // ==========================================
+
+  const llamarContacto = (contacto: ContactInfo) => {
+    if (contacto.phoneNumber) {
+      const numeroLimpio = contacto.phoneNumber.replace(/[^\d+]/g, '');
+      Linking.openURL(`tel:${numeroLimpio}`);
+    }
+  };
+
+  const eliminarContacto = async (id: string) => {
+    try {
+      const nuevaLista = listaContactos.filter((c) => c.id !== id);
+      setListaContactos(nuevaLista);
+      await AsyncStorage.setItem('@mis_contactos', JSON.stringify(nuevaLista));
+    } catch (error) {
+      console.log('Error al eliminar contacto:', error);
+    }
+  };
+
+  const hayNotificaciones =
+    listaRecordatorios.length > 0 || eventosCercanos.length > 0;
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
       <ScrollView contentContainerStyle={styles.scrollGeneral} showsVerticalScrollIndicator={false}>
 
         {/* ========================================== */}
@@ -304,118 +422,210 @@ export default function App() {
         {/* ========================================== */}
 
         <View style={styles.header}>
-          <Text style={styles.titulo}>
+          <Text style={[styles.titulo, { color: theme.text }]}>
             MobiAmigo
+          </Text>
+          <Text style={[styles.subtituloHeader, { color: theme.subtext }]}>
+            Tu asistente fácil y rápido
           </Text>
         </View>
 
         {/* ========================================== */}
-        {/* ZONA DE RECORDATORIOS */}
+        {/* 1. ZONA DE NOTIFICACIONES MÁS CERCANAS */}
         {/* ========================================== */}
 
-        <View style={styles.zonaNotificaciones}>
-          {listaRecordatorios.length > 0 && (
-            <View>
-              {listaRecordatorios.map(
-                (item, index) => (
-                  <View
-                    key={index}
-                    style={styles.tarjetaRecordatorio}
-                  >
-                    {/* ========================================== */}
-                    {/* TEXTO DEL RECORDATORIO */}
-                    {/* ========================================== */}
+        {hayNotificaciones && (
+          <View style={styles.zonaNotificaciones}>
+            <Text style={[styles.tituloSeccion, { color: theme.text }]}>
+              🔔 Avisos y Recordatorios
+            </Text>
 
-                    <View style={styles.bloqueTexto}>
-                      <Ionicons
-                        name="notifications-sharp"
-                        size={20}
-                        color="#0080ff"
-                        style={styles.iconoTarjeta}
-                      />
-                      <Text
-                        style={styles.textoTarjeta}
-                      >
-                        {item}
-                      </Text>
-                    </View>
+            {/* Recordatorios rápidos */}
+            {listaRecordatorios.map((item, index) => (
+              <View
+                key={`rec-${index}`}
+                style={[
+                  styles.tarjetaRecordatorio,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                    borderLeftColor: theme.btnRecordatorio,
+                  },
+                ]}
+              >
+                <View style={styles.bloqueTexto}>
+                  <Ionicons
+                    name="notifications"
+                    size={26}
+                    color={theme.btnRecordatorio}
+                    style={styles.iconoTarjeta}
+                  />
+                  <Text style={[styles.textoTarjeta, { color: theme.text }]}>
+                    {item}
+                  </Text>
+                </View>
 
-                    {/* ========================================== */}
-                    {/* BOTÓN ELIMINAR */}
-                    {/* ========================================== */}
+                <TouchableOpacity
+                  style={styles.botonEliminar}
+                  onPress={() => eliminarRecordatorio(index)}
+                  accessibilityLabel="Borrar recordatorio"
+                >
+                  <Ionicons
+                    name="trash"
+                    size={24}
+                    color={theme.danger}
+                  />
+                </TouchableOpacity>
+              </View>
+            ))}
 
-                    <TouchableOpacity
-                      style={styles.botonEliminar}
-                      onPress={() =>
-                        eliminarRecordatorio(index)
-                      }
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={20}
-                        color="#ff4444"
-                      />
-                    </TouchableOpacity>
+            {/* Eventos más cercanos del calendario */}
+            {eventosCercanos.map((ev) => (
+              <Pressable
+                key={`ev-${ev.id}`}
+                onPress={() => router.push('/calendario')}
+                style={[
+                  styles.tarjetaRecordatorio,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                    borderLeftColor: theme.btnCalendario,
+                  },
+                ]}
+              >
+                <View style={styles.bloqueTexto}>
+                  <Ionicons
+                    name="calendar"
+                    size={26}
+                    color={theme.btnCalendario}
+                    style={styles.iconoTarjeta}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.textoTarjeta, { color: theme.text }]}>
+                      {ev.nombre}
+                    </Text>
+                    <Text style={[styles.fechaEventoTexto, { color: theme.subtext }]}>
+                      📅 {ev.dia} de {MESES_CORTOS[ev.mes]} • 🕒 {ev.hora} hrs
+                    </Text>
                   </View>
-                )
-              )}
-            </View>
-          )}
-        </View>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={22}
+                  color={theme.subtext}
+                />
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         {/* ========================================== */}
-        {/* ZONA DE APLICACIONES */}
+        {/* 2. FILA DE 4 CONTACTOS */}
+        {/* ========================================== */}
+
+        {listaContactos.length > 0 && (
+          <View style={styles.seccionContenedor}>
+            <Text style={[styles.tituloSeccion, { color: theme.text }]}>
+              📞 Mis Contactos (Toca para llamar)
+            </Text>
+            <View style={styles.filaCuatro}>
+              {listaContactos.map((contacto) => (
+                <Pressable
+                  key={contacto.id}
+                  style={[
+                    styles.tarjetaCuatro,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                  onPress={() => llamarContacto(contacto)}
+                >
+                  <TouchableOpacity
+                    style={styles.botonQuitarMini}
+                    onPress={() => eliminarContacto(contacto.id)}
+                  >
+                    <Ionicons name="close-circle" size={20} color={theme.danger} />
+                  </TouchableOpacity>
+
+                  <View style={[styles.avatarContacto, { backgroundColor: theme.btnContactos }]}>
+                    <Ionicons name="call" size={26} color="#FFFFFF" />
+                  </View>
+
+                  <Text
+                    style={[styles.nombreItemCuatro, { color: theme.text }]}
+                    numberOfLines={2}
+                  >
+                    {contacto.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ========================================== */}
+        {/* 3. FILA DE 4 APLICACIONES */}
         {/* ========================================== */}
 
         {listaApps.length > 0 && (
-          <View style={styles.zonaApps}>
-            {listaApps.map((item) => (
-              <Pressable
-                key={item.packageName}
-                style={styles.tarjetaApp}
-                onPress={() =>
-                  abrirAplicacion(
-                    item.packageName
-                  )
-                }
-              >
-                {/* ========================================== */}
-                {/* ICONO DE LA APLICACIÓN */}
-                {/* ========================================== */}
-
-                {item.icon ? (
-                  <Image
-                    source={{
-                      uri: item.icon
-                    }}
-                    style={styles.iconoApp}
-                  />
-                ) : (
-                  <View
-                    style={
-                      styles.iconoAppPlaceholder
-                    }
-                  >
-                    <Ionicons
-                      name="apps"
-                      size={35}
-                      color="#F8E9E9"
-                    />
-                  </View>
-                )}
-
-                {/* ========================================== */}
-                {/* NOMBRE DE LA APLICACIÓN */}
-                {/* ========================================== */}
-
-                <Text
-                  style={styles.nombreApp}
-                  numberOfLines={1}
+          <View style={styles.seccionContenedor}>
+            <Text style={[styles.tituloSeccion, { color: theme.text }]}>
+              📱 Mis Aplicaciones
+            </Text>
+            <View style={styles.filaCuatro}>
+              {listaApps.map((item) => (
+                <Pressable
+                  key={item.packageName}
+                  style={[
+                    styles.tarjetaCuatro,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                  onPress={() => abrirAplicacion(item.packageName)}
                 >
-                  {item.label || 'Aplicación'}
-                </Text>
-              </Pressable>
-            ))}
+                  {/* ========================================== */}
+                  {/* ICONO DE LA APLICACIÓN */}
+                  {/* ========================================== */}
+
+                  {item.icon ? (
+                    <Image
+                      source={{
+                        uri: item.icon
+                      }}
+                      style={styles.iconoApp}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.iconoAppPlaceholder,
+                        { backgroundColor: theme.btnApps }
+                      ]}
+                    >
+                      <Ionicons
+                        name="apps"
+                        size={30}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                  )}
+
+                  {/* ========================================== */}
+                  {/* NOMBRE DE LA APLICACIÓN */}
+                  {/* ========================================== */}
+
+                  <Text
+                    style={[styles.nombreItemCuatro, { color: theme.text }]}
+                    numberOfLines={2}
+                  >
+                    {item.label || 'Aplicación'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         )}
 
@@ -430,13 +640,13 @@ export default function App() {
           {/* ========================================== */}
 
           <Pressable
-            style={styles.boton}
+            style={[styles.boton, { backgroundColor: theme.btnApps }]}
             onPress={gestionarAplicaciones}
           >
             <Ionicons
               name="apps"
-              size={70}
-              color="#F8E9E9"
+              size={60}
+              color="#FFFFFF"
             />
             <Text style={styles.textoBoton}>
               Añadir Apps
@@ -448,7 +658,7 @@ export default function App() {
           {/* ========================================== */}
 
           <Pressable
-            style={styles.boton}
+            style={[styles.boton, { backgroundColor: theme.btnRecordatorio }]}
             onPress={() =>
               router.push(
                 "/agregarecordatorio"
@@ -456,15 +666,12 @@ export default function App() {
             }
           >
             <Ionicons
-              name="calendar-outline"
-              size={70}
-              color="#F8E9E9"
+              name="notifications"
+              size={60}
+              color="#FFFFFF"
             />
             <Text style={styles.textoBoton}>
-              Añadir
-            </Text>
-            <Text style={styles.textoBoton}>
-              Recordatorio
+              Añadir Recordatorio
             </Text>
           </Pressable>
         </View>
@@ -479,11 +686,14 @@ export default function App() {
           {/* BOTÓN AGREGAR CONTACTOS */}
           {/* ========================================== */}
 
-          <Pressable style={styles.boton} onPress={getContacts}>
+          <Pressable
+            style={[styles.boton, { backgroundColor: theme.btnContactos }]}
+            onPress={getContacts}
+          >
             <Ionicons
-              name="person-outline"
-              size={70}
-              color="#F8E9E9"
+              name="call"
+              size={60}
+              color="#FFFFFF"
             />
             <Text style={styles.textoBoton}>
               Agregar Contactos
@@ -495,13 +705,13 @@ export default function App() {
           {/* ========================================== */}
 
           <Pressable 
-            style={styles.boton} 
+            style={[styles.boton, { backgroundColor: theme.btnCalendario }]} 
             onPress={() => router.push('/calendario')}
           >
             <Ionicons
-              name="today-outline"
-              size={70}
-              color="#F8E9E9"
+              name="calendar"
+              size={60}
+              color="#FFFFFF"
             />
             <Text style={styles.textoBoton}>
               Calendario
@@ -523,49 +733,65 @@ const styles = StyleSheet.create({
   // ==========================================
   container: {
     flex: 1,
-    backgroundColor: '#000040',
   },
   // ==========================================
   // SCROLL GENERAL
   // ==========================================
   scrollGeneral: {
-    paddingBottom: 30,
+    paddingBottom: 32,
   },
   // ==========================================
   // ENCABEZADO
   // ==========================================
   header: {
     width: '100%',
-    height: 80,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   titulo: {
-    color: '#F8E9E9',
-    fontSize: 32,
-    fontWeight: '400',
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  subtituloHeader: {
+    fontSize: 16,
+    marginTop: 2,
+    fontWeight: '500',
   },
   // ==========================================
-  // ZONA DE RECORDATORIOS
+  // TÍTULOS DE SECCIÓN
+  // ==========================================
+  tituloSeccion: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  // ==========================================
+  // ZONA DE RECORDATORIOS Y NOTIFICACIONES
   // ==========================================
   zonaNotificaciones: {
     width: '100%',
     paddingHorizontal: 16,
-    marginTop: 5,
+    marginBottom: 14,
   },
   // ==========================================
-  // TARJETA DE RECORDATORIO
+  // TARJETA DE RECORDATORIO / EVENTO
   // ==========================================
   tarjetaRecordatorio: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#0c0c5a',
     padding: 16,
-    borderRadius: 14,
-    marginBottom: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#0080ff',
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderLeftWidth: 7,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   // ==========================================
   // BLOQUE DEL TEXTO
@@ -586,65 +812,86 @@ const styles = StyleSheet.create({
   // TEXTO DEL RECORDATORIO
   // ==========================================
   textoTarjeta: {
-    color: '#F8E9E9',
-    fontSize: 16,
+    fontSize: 19,
+    fontWeight: '600',
     flex: 1,
+  },
+  fechaEventoTexto: {
+    fontSize: 15,
+    marginTop: 4,
+    fontWeight: '500',
   },
   // ==========================================
   // BOTÓN ELIMINAR
   // ==========================================
   botonEliminar: {
-    padding: 4,
+    padding: 6,
   },
   // ==========================================
-  // ZONA DE APLICACIONES
+  // SECCIONES DE 4 ELEMENTOS POR FILA (CONTACTOS Y APPS)
   // ==========================================
-  zonaApps: {
+  seccionContenedor: {
     width: '100%',
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
+    marginBottom: 14,
+  },
+  filaCuatro: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-start',
+    gap: 8,
   },
-  // ==========================================
-  // TARJETA DE APLICACIÓN
-  // ==========================================
-  tarjetaApp: {
-    width: '30%',
-    marginRight: '3%',
-    marginBottom: 15,
+  tarjetaCuatro: {
+    width: '23%',
     alignItems: 'center',
-    backgroundColor: '#0c0c5a',
-    padding: 10,
-    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    position: 'relative',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  botonQuitarMini: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    zIndex: 5,
+  },
+  avatarContacto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // ==========================================
   // ICONO DE APLICACIÓN
   // ==========================================
   iconoApp: {
-    width: 55,
-    height: 55,
+    width: 50,
+    height: 50,
     borderRadius: 12,
   },
   // ==========================================
   // ICONO DE APLICACIÓN SIN IMAGEN
   // ==========================================
   iconoAppPlaceholder: {
-    width: 55,
-    height: 55,
+    width: 50,
+    height: 50,
     borderRadius: 12,
-    backgroundColor: '#493936',
     alignItems: 'center',
     justifyContent: 'center',
   },
   // ==========================================
-  // NOMBRE DE LA APLICACIÓN
+  // NOMBRE DE CONTACTO O APLICACIÓN EN FILA DE 4
   // ==========================================
-  nombreApp: {
-    color: '#F8E9E9',
-    fontSize: 14,
+  nombreItemCuatro: {
+    fontSize: 13,
+    fontWeight: '700',
     marginTop: 6,
     textAlign: 'center',
   },
@@ -655,8 +902,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    marginTop: 0,
-    marginBottom: 20,
+    marginTop: 4,
+    marginBottom: 14,
     width: '100%',
   },
   // ==========================================
@@ -664,40 +911,26 @@ const styles = StyleSheet.create({
   // ==========================================
   boton: {
     width: '48%',
-    height: 180,
-    backgroundColor: '#493936',
-    borderRadius: 12,
+    minHeight: 155,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
+    paddingVertical: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   // ==========================================
   // TEXTO DE LOS BOTONES
   // ==========================================
   textoBoton: {
-    color: '#F8E9E9',
-    fontSize: 22,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  brownButton: {
-    backgroundColor: '#4E3629', 
-    borderRadius: 14,           
-    paddingVertical: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 140,             
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,               
-  },
-  buttonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    marginTop: 12,
+    fontSize: 21,
+    fontWeight: '700',
     textAlign: 'center',
-    fontWeight: '500',
-  }
+    marginTop: 10,
+  },
 });

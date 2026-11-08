@@ -13,6 +13,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useColorScheme,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,10 +28,29 @@ interface AppInfo {
   icon?: string;
 }
 
-
 export default function EliminarAppsScreen(): React.JSX.Element {
 
   const router = useRouter();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+
+  // ==========================================
+  // PALETA DE COLORES (MODO CLARO / OSCURO AUTOMÁTICO)
+  // ==========================================
+  const theme = {
+    bg: isDark ? '#0F172A' : '#FFFDF9',
+    card: isDark ? '#1E293B' : '#FFFFFF',
+    cardBorder: isDark ? '#334155' : '#D6D3CD',
+    cardSelectedBg: isDark ? '#450A0A' : '#FEE2E2',
+    cardSelectedBorder: '#DC2626',
+    text: isDark ? '#F8FAFC' : '#111827',
+    subtext: isDark ? '#94A3B8' : '#6B7280',
+    backBg: isDark ? '#1E293B' : '#E5E7EB',
+    backBorder: isDark ? '#334155' : '#D1D5DB',
+    btnDelete: '#DC2626',
+    accent: '#1D4ED8',
+  };
+
   // ==========================================
   // LISTA DE APLICACIONES GUARDADAS
   // ==========================================
@@ -47,6 +67,7 @@ export default function EliminarAppsScreen(): React.JSX.Element {
 
   const [selectedApps, setSelectedApps] =
     useState<Set<string>>(new Set());
+
   // ==========================================
   // ESTADO DE CARGA
   // ==========================================
@@ -126,6 +147,7 @@ export default function EliminarAppsScreen(): React.JSX.Element {
     });
 
   };
+
   // ==========================================
   // ELIMINAR APLICACIONES SELECCIONADAS
   // ==========================================
@@ -165,6 +187,7 @@ export default function EliminarAppsScreen(): React.JSX.Element {
     }
 
   };
+
   // ==========================================
   // MOSTRAR CADA APLICACIÓN
   // ==========================================
@@ -184,9 +207,11 @@ export default function EliminarAppsScreen(): React.JSX.Element {
 
           style={[
             styles.appCard,
-
-            seleccionada &&
-            styles.appCardSeleccionada
+            {
+              backgroundColor: seleccionada ? theme.cardSelectedBg : theme.card,
+              borderColor: seleccionada ? theme.cardSelectedBorder : theme.cardBorder,
+            },
+            seleccionada && styles.appCardSeleccionada
           ]}
         >
           {/* ========================================== */}
@@ -207,14 +232,15 @@ export default function EliminarAppsScreen(): React.JSX.Element {
             <View
               style={[
                 styles.icon,
-                styles.iconPlaceholder
+                styles.iconPlaceholder,
+                { backgroundColor: theme.accent }
               ]}
             >
 
               <Ionicons
                 name="apps"
-                size={24}
-                color="#F8E9E9"
+                size={28}
+                color="#FFFFFF"
               />
 
             </View>
@@ -228,17 +254,10 @@ export default function EliminarAppsScreen(): React.JSX.Element {
           <View style={styles.appInfo}>
 
             <Text
-              style={styles.appName}
+              style={[styles.appName, { color: theme.text }]}
               numberOfLines={1}
             >
               {item.label || 'Aplicación'}
-            </Text>
-
-            <Text
-              style={styles.packageName}
-              numberOfLines={1}
-            >
-              {item.packageName}
             </Text>
 
           </View>
@@ -247,15 +266,11 @@ export default function EliminarAppsScreen(): React.JSX.Element {
           {/* MARCA DE SELECCIÓN */}
           {/* ========================================== */}
 
-          {seleccionada && (
-
-            <Ionicons
-              name="checkmark-circle"
-              size={30}
-              color="#F8E9E9"
-            />
-
-          )}
+          <Ionicons
+            name={seleccionada ? "checkmark-circle" : "ellipse-outline"}
+            size={34}
+            color={seleccionada ? theme.btnDelete : theme.subtext}
+          />
 
         </Pressable>
 
@@ -265,38 +280,40 @@ export default function EliminarAppsScreen(): React.JSX.Element {
 
   return (
 
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
 
       {/* ========================================== */}
-      {/* BOTÓN ATRÁS */}
+      {/* BARRA SUPERIOR Y BOTÓN ATRÁS */}
       {/* ========================================== */}
 
-      <Pressable
-        onPress={() => router.back()}
-        style={styles.botonAtras}
-      >
-
-        <Ionicons
-          name="arrow-back"
-          size={32}
-          color="#F8E9E9"
-        />
-
-      </Pressable>
-
+      <View style={styles.barraSuperior}>
+        <Pressable
+          onPress={() => router.back()}
+          style={[
+            styles.botonAtras,
+            { backgroundColor: theme.backBg, borderColor: theme.backBorder }
+          ]}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={28}
+            color={theme.text}
+          />
+          <Text style={[styles.textoBotonAtras, { color: theme.text }]}>
+            Volver
+          </Text>
+        </Pressable>
+      </View>
 
       {/* ========================================== */}
       {/* TÍTULO */}
       {/* ========================================== */}
 
       <View style={styles.header}>
-
-        <Text style={styles.titulo}>
+        <Text style={[styles.titulo, { color: theme.text }]}>
           Eliminar Apps
         </Text>
-
       </View>
-
 
       {/* ========================================== */}
       {/* CONTENIDO PRINCIPAL */}
@@ -308,10 +325,10 @@ export default function EliminarAppsScreen(): React.JSX.Element {
 
           <ActivityIndicator
             size="large"
-            color="#0080ff"
+            color={theme.accent}
           />
 
-          <Text style={styles.loadingText}>
+          <Text style={[styles.loadingText, { color: theme.text }]}>
             Cargando aplicaciones...
           </Text>
 
@@ -323,11 +340,11 @@ export default function EliminarAppsScreen(): React.JSX.Element {
 
           <Ionicons
             name="apps-outline"
-            size={60}
-            color="#F8E9E9"
+            size={64}
+            color={theme.subtext}
           />
 
-          <Text style={styles.sinAppsText}>
+          <Text style={[styles.sinAppsText, { color: theme.text }]}>
             No hay aplicaciones agregadas.
           </Text>
 
@@ -356,18 +373,18 @@ export default function EliminarAppsScreen(): React.JSX.Element {
           {/* El botón elimina solamente las apps que */}
           {/* hayan sido seleccionadas previamente. */}
           <Pressable
-            style={styles.botonEliminar}
+            style={[styles.botonEliminar, { backgroundColor: theme.btnDelete }]}
             onPress={eliminarAppsSeleccionadas}
           >
 
             <Ionicons
-              name="trash-outline"
+              name="trash"
               size={28}
-              color="#F8E9E9"
+              color="#FFFFFF"
             />
 
             <Text style={styles.textoEliminar}>
-              Eliminar seleccionadas
+              Eliminar seleccionadas ({selectedApps.size})
             </Text>
 
           </Pressable>
@@ -393,18 +410,31 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#000040',
   },
 
   // ==========================================
-  // BOTÓN ATRÁS
+  // BARRA SUPERIOR Y BOTÓN ATRÁS
   // ==========================================
 
+  barraSuperior: {
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   botonAtras: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  textoBotonAtras: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginLeft: 8,
   },
 
   // ==========================================
@@ -413,15 +443,14 @@ const styles = StyleSheet.create({
 
   header: {
     width: '100%',
-    height: 80,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   titulo: {
-    color: '#F8E9E9',
     fontSize: 32,
-    fontWeight: '400',
+    fontWeight: '800',
   },
 
   // ==========================================
@@ -437,14 +466,14 @@ const styles = StyleSheet.create({
 
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
-    color: '#F8E9E9',
+    fontSize: 18,
+    fontWeight: '600',
   },
 
   sinAppsText: {
     marginTop: 15,
     fontSize: 20,
-    color: '#F8E9E9',
+    fontWeight: '600',
     textAlign: 'center',
   },
 
@@ -464,10 +493,10 @@ const styles = StyleSheet.create({
   appCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0c0c5a',
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 8,
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1.5,
   },
 
   // ==========================================
@@ -475,8 +504,7 @@ const styles = StyleSheet.create({
   // ==========================================
 
   appCardSeleccionada: {
-    borderWidth: 2,
-    borderColor: '#F8E9E9',
+    borderWidth: 2.5,
   },
 
   // ==========================================
@@ -484,14 +512,13 @@ const styles = StyleSheet.create({
   // ==========================================
 
   icon: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    marginRight: 14,
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    marginRight: 16,
   },
 
   iconPlaceholder: {
-    backgroundColor: '#493936',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -505,15 +532,8 @@ const styles = StyleSheet.create({
   },
 
   appName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#F8E9E9',
-  },
-
-  packageName: {
-    fontSize: 12,
-    color: '#a08ba1',
-    marginTop: 2,
+    fontSize: 20,
+    fontWeight: '700',
   },
 
   // ==========================================
@@ -524,18 +544,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#493936',
     marginHorizontal: 16,
     marginBottom: 20,
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 18,
+    borderRadius: 16,
+    elevation: 4,
   },
 
   textoEliminar: {
-    color: '#F8E9E9',
-    fontSize: 20,
+    color: '#FFFFFF',
+    fontSize: 22,
     marginLeft: 10,
-    fontWeight: '600',
+    fontWeight: '800',
   },
 
 });

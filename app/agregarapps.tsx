@@ -14,9 +14,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
+  useColorScheme,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 // ==========================================
 // INFORMACIÓN DE LAS APLICACIONES
 // ==========================================
@@ -26,9 +29,28 @@ interface AppInfo {
   icon?: string;
 }
 
-
 export default function AgregarAppsScreen(): React.JSX.Element {
   const router = useRouter();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+
+  // ==========================================
+  // PALETA DE COLORES (MODO CLARO / OSCURO AUTOMÁTICO)
+  // ==========================================
+  const theme = {
+    bg: isDark ? '#0F172A' : '#FFFDF9',
+    card: isDark ? '#1E293B' : '#FFFFFF',
+    cardBorder: isDark ? '#334155' : '#D6D3CD',
+    cardSelectedBg: isDark ? '#064E3B' : '#DCFCE7',
+    cardSelectedBorder: '#15803D',
+    text: isDark ? '#F8FAFC' : '#111827',
+    subtext: isDark ? '#94A3B8' : '#6B7280',
+    backBg: isDark ? '#1E293B' : '#E5E7EB',
+    backBorder: isDark ? '#334155' : '#D1D5DB',
+    btnConfirm: '#15803D',
+    accent: '#1D4ED8',
+  };
+
   // ==========================================
   // LISTA DE APLICACIONES INSTALADAS
   // ==========================================
@@ -36,6 +58,12 @@ export default function AgregarAppsScreen(): React.JSX.Element {
   // instaladas en el teléfono.
 
   const [apps, setApps] = useState<AppInfo[]>([]);
+
+  // ==========================================
+  // BUSCADOR DE APLICACIONES
+  // ==========================================
+  const [busqueda, setBusqueda] = useState<string>('');
+
   // ==========================================
   // APLICACIONES SELECCIONADAS
   // ==========================================
@@ -44,6 +72,7 @@ export default function AgregarAppsScreen(): React.JSX.Element {
 
   const [selectedApps, setSelectedApps] =
     useState<Set<string>>(new Set());
+
   // ==========================================
   // APLICACIONES QUE YA ESTÁN AGREGADAS
   // ==========================================
@@ -54,16 +83,19 @@ export default function AgregarAppsScreen(): React.JSX.Element {
 
   const [appsYaAgregadas, setAppsYaAgregadas] =
     useState<AppInfo[]>([]);
+
   // ==========================================
   // ESTADO DE CARGA
   // ==========================================
   const [loading, setLoading] =
     useState<boolean>(true);
+
   // ==========================================
   // MENSAJE DE ERROR
   // ==========================================
   const [errorMsg, setErrorMsg] =
     useState<string | null>(null);
+
   // ==========================================
   // CARGAR APLICACIONES INSTALADAS
   // ==========================================
@@ -287,6 +319,7 @@ export default function AgregarAppsScreen(): React.JSX.Element {
     });
 
   };
+
   // ==========================================
   // CONFIRMAR SELECCIÓN
   // ==========================================
@@ -371,9 +404,11 @@ export default function AgregarAppsScreen(): React.JSX.Element {
 
           style={[
             styles.appCard,
-
-            seleccionada &&
-            styles.appCardSeleccionada
+            {
+              backgroundColor: seleccionada ? theme.cardSelectedBg : theme.card,
+              borderColor: seleccionada ? theme.cardSelectedBorder : theme.cardBorder,
+            },
+            seleccionada && styles.appCardSeleccionada
           ]}
 
         >
@@ -399,14 +434,15 @@ export default function AgregarAppsScreen(): React.JSX.Element {
             <View
               style={[
                 styles.icon,
-                styles.iconPlaceholder
+                styles.iconPlaceholder,
+                { backgroundColor: theme.accent }
               ]}
             >
 
               <Ionicons
                 name="cube-outline"
-                size={24}
-                color="#F8E9E9"
+                size={28}
+                color="#FFFFFF"
               />
 
             </View>
@@ -419,18 +455,10 @@ export default function AgregarAppsScreen(): React.JSX.Element {
           <View style={styles.appInfo}>
 
             <Text
-              style={styles.appName}
+              style={[styles.appName, { color: theme.text }]}
               numberOfLines={1}
             >
               {item.label || 'Aplicación'}
-            </Text>
-
-
-            <Text
-              style={styles.packageName}
-              numberOfLines={1}
-            >
-              {item.packageName}
             </Text>
 
           </View>
@@ -438,29 +466,24 @@ export default function AgregarAppsScreen(): React.JSX.Element {
           {/* MARCA DE SELECCIÓN */}
           {/* ========================================== */}
 
-          {seleccionada && (
-
-            <Ionicons
-              name="checkmark-circle"
-              size={28}
-              color="#F8E9E9"
-            />
-
-          )}
+          <Ionicons
+            name={seleccionada ? "checkmark-circle" : "ellipse-outline"}
+            size={34}
+            color={seleccionada ? theme.btnConfirm : theme.subtext}
+          />
 
         </Pressable>
 
       );
 
     };
+
   // ==========================================
   // FILTRAR APLICACIONES
   // ==========================================
   // Se crea una lista nueva que solamente contiene
   // las aplicaciones que todavía NO están agregadas
-  // en el index.
-  // De esta manera las aplicaciones que ya están
-  // en el index no aparecen en esta pantalla.
+  // en el index y que coinciden con el buscador.
   const appsDisponibles =
     apps.filter((app) => {
 
@@ -471,52 +494,84 @@ export default function AgregarAppsScreen(): React.JSX.Element {
             app.packageName
         );
 
-      return !yaExiste;
+      const coincideBusqueda =
+        (app.label || '')
+          .toLowerCase()
+          .includes(busqueda.trim().toLowerCase());
+
+      return !yaExiste && coincideBusqueda;
 
     });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
 
       {/* ========================================== */}
-      {/* BOTÓN ATRÁS */}
+      {/* BARRA SUPERIOR Y BOTÓN ATRÁS */}
       {/* ========================================== */}
 
-      <Pressable
+      <View style={styles.barraSuperior}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/');
+            }
+          }}
+          style={[
+            styles.botonAtras,
+            { backgroundColor: theme.backBg, borderColor: theme.backBorder }
+          ]}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={28}
+            color={theme.text}
+          />
+          <Text style={[styles.textoBotonAtras, { color: theme.text }]}>
+            Volver
+          </Text>
+        </Pressable>
+      </View>
 
-        onPress={() => {
-
-          if (router.canGoBack()) {
-
-            router.back();
-
-          } else {
-
-            router.replace('/');
-          }
-        }}
-
-        style={styles.botonAtras}
-
-      >
-        <Ionicons
-          name="arrow-back"
-          size={32}
-          color="#F8E9E9"
-        />
-
-      </Pressable>
       {/* ========================================== */}
       {/* TÍTULO DE LA PANTALLA */}
       {/* ========================================== */}
 
       <View style={styles.header}>
-
-        <Text style={styles.titulo}>
+        <Text style={[styles.titulo, { color: theme.text }]}>
           Añadir Apps
         </Text>
-
       </View>
+
+      {/* ========================================== */}
+      {/* BUSCADOR DE APLICACIONES */}
+      {/* ========================================== */}
+
+      {!loading && !errorMsg && (
+        <View
+          style={[
+            styles.contenedorBuscador,
+            { backgroundColor: theme.card, borderColor: theme.cardBorder }
+          ]}
+        >
+          <Ionicons name="search" size={24} color={theme.subtext} />
+          <TextInput
+            style={[styles.inputBuscador, { color: theme.text }]}
+            placeholder="Buscar aplicación por nombre..."
+            placeholderTextColor={theme.subtext}
+            value={busqueda}
+            onChangeText={setBusqueda}
+          />
+          {busqueda.length > 0 && (
+            <Pressable onPress={() => setBusqueda('')}>
+              <Ionicons name="close-circle" size={24} color={theme.subtext} />
+            </Pressable>
+          )}
+        </View>
+      )}
+
       {/* ========================================== */}
       {/* CONTENIDO PRINCIPAL */}
       {/* ========================================== */}
@@ -527,10 +582,10 @@ export default function AgregarAppsScreen(): React.JSX.Element {
 
           <ActivityIndicator
             size="large"
-            color="#0080ff"
+            color={theme.accent}
           />
 
-          <Text style={styles.loadingText}>
+          <Text style={[styles.loadingText, { color: theme.text }]}>
             Cargando aplicaciones...
           </Text>
 
@@ -550,19 +605,18 @@ export default function AgregarAppsScreen(): React.JSX.Element {
         // ==========================================
         // NO HAY APLICACIONES NUEVAS
         // ==========================================
-        // Si todas las aplicaciones instaladas ya
-        // están agregadas en el index, mostramos
-        // este mensaje.
         <View style={styles.center}>
 
           <Ionicons
             name="checkmark-circle-outline"
-            size={60}
-            color="#F8E9E9"
+            size={64}
+            color={theme.btnConfirm}
           />
 
-          <Text style={styles.sinAppsText}>
-            No hay aplicaciones nuevas para agregar.
+          <Text style={[styles.sinAppsText, { color: theme.text }]}>
+            {busqueda.trim().length > 0
+              ? 'No se encontraron aplicaciones con ese nombre.'
+              : 'No hay aplicaciones nuevas para agregar.'}
           </Text>
 
         </View>
@@ -573,8 +627,6 @@ export default function AgregarAppsScreen(): React.JSX.Element {
           {/* ========================================== */}
           {/* LISTA DE APLICACIONES DISPONIBLES */}
           {/* ========================================== */}
-          {/* Aquí solamente aparecen aplicaciones */}
-          {/* que todavía no están en el index. */}
           <FlatList
 
             data={appsDisponibles}
@@ -593,19 +645,17 @@ export default function AgregarAppsScreen(): React.JSX.Element {
           {/* ========================================== */}
           {/* BOTÓN CONFIRMAR SELECCIÓN */}
           {/* ========================================== */}
-          {/* Guarda las nuevas aplicaciones y conserva */}
-          {/* las que ya estaban agregadas. */}
           <Pressable
-            style={styles.botonConfirmar}
+            style={[styles.botonConfirmar, { backgroundColor: theme.btnConfirm }]}
             onPress={confirmarSeleccion}
           >
             <Ionicons
-              name="checkmark-circle-outline"
-              size={28}
-              color="#F8E9E9"
+              name="checkmark-circle"
+              size={30}
+              color="#FFFFFF"
             />
             <Text style={styles.textoConfirmar}>
-              Confirmar selección
+              Confirmar selección ({selectedApps.size})
             </Text>
 
           </Pressable>
@@ -628,16 +678,29 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#000040',
   },
   // ==========================================
-  // BOTÓN ATRÁS
+  // BARRA SUPERIOR Y BOTÓN ATRÁS
   // ==========================================
+  barraSuperior: {
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   botonAtras: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  textoBotonAtras: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginLeft: 8,
   },
   // ==========================================
   // ENCABEZADO
@@ -645,15 +708,32 @@ const styles = StyleSheet.create({
 
   header: {
     width: '100%',
-    height: 80,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   titulo: {
-    color: '#F8E9E9',
     fontSize: 32,
-    fontWeight: '400',
+    fontWeight: '800',
+  },
+  // ==========================================
+  // BUSCADOR
+  // ==========================================
+  contenedorBuscador: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  inputBuscador: {
+    flex: 1,
+    fontSize: 18,
+    marginLeft: 10,
   },
   // ==========================================
   // CONTENEDOR CENTRAL
@@ -668,20 +748,21 @@ const styles = StyleSheet.create({
 
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
-    color: '#F8E9E9',
+    fontSize: 18,
+    fontWeight: '600',
   },
 
   errorText: {
-    fontSize: 16,
-    color: '#ff4444',
+    fontSize: 18,
+    color: '#DC2626',
     textAlign: 'center',
+    fontWeight: '600',
   },
 
   sinAppsText: {
     marginTop: 15,
     fontSize: 20,
-    color: '#F8E9E9',
+    fontWeight: '600',
     textAlign: 'center',
   },
   // ==========================================
@@ -699,32 +780,30 @@ const styles = StyleSheet.create({
   appCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0c0c5a',
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 8,
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1.5,
   },
   // ==========================================
   // TARJETA SELECCIONADA
   // ==========================================
 
   appCardSeleccionada: {
-    borderWidth: 2,
-    borderColor: '#F8E9E9',
+    borderWidth: 2.5,
   },
   // ==========================================
   // ICONO
   // ==========================================
 
   icon: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    marginRight: 14,
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    marginRight: 16,
   },
 
   iconPlaceholder: {
-    backgroundColor: '#493936',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -738,15 +817,8 @@ const styles = StyleSheet.create({
   },
 
   appName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#F8E9E9',
-  },
-
-  packageName: {
-    fontSize: 12,
-    color: '#a08ba1',
-    marginTop: 2,
+    fontSize: 20,
+    fontWeight: '700',
   },
 
   // ==========================================
@@ -757,18 +829,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#493936',
     marginHorizontal: 16,
     marginBottom: 20,
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 18,
+    borderRadius: 16,
+    elevation: 4,
   },
 
   textoConfirmar: {
-    color: '#F8E9E9',
-    fontSize: 20,
+    color: '#FFFFFF',
+    fontSize: 22,
     marginLeft: 10,
-    fontWeight: '600',
+    fontWeight: '800',
   },
 
 });

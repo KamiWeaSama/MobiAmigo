@@ -5,45 +5,70 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
-    Pressable,
-    StyleSheet,
-    Text,
-    View
+  Pressable,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function OpcionesAppsScreen() {
 
   const router = useRouter();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+
+  // ==========================================
+  // PALETA DE COLORES (MODO CLARO / OSCURO AUTOMÁTICO)
+  // ==========================================
+
+  const theme = {
+    bg: isDark ? '#0F172A' : '#FFFDF9',
+    text: isDark ? '#F8FAFC' : '#111827',
+    backBg: isDark ? '#1E293B' : '#E5E7EB',
+    backBorder: isDark ? '#334155' : '#D1D5DB',
+    btnAdd: '#15803D',    // Verde claro y amigable para Añadir
+    btnDelete: '#DC2626', // Rojo claro e intuitivo para Eliminar
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
       {/* ========================================== */}
-      {/* BOTÓN PARA VOLVER */}
+      {/* ENCABEZADO Y BOTÓN PARA VOLVER */}
       {/* ========================================== */}
       {/* Permite regresar a la pantalla principal */}
       {/* de MobiAmigo sin realizar ningún cambio. */}
-      <Pressable
-        onPress={() => router.back()}
-        style={styles.botonAtras}
-      >
-        <Ionicons
-          name="arrow-back"
-          size={32}
-          color="#F8E9E9"
-        />
-      </Pressable>
+
+      <View style={styles.barraSuperior}>
+        <Pressable
+          onPress={() => router.back()}
+          style={[
+            styles.botonAtras,
+            { backgroundColor: theme.backBg, borderColor: theme.backBorder }
+          ]}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={28}
+            color={theme.text}
+          />
+          <Text style={[styles.textoBotonAtras, { color: theme.text }]}>
+            Volver
+          </Text>
+        </Pressable>
+      </View>
+
       {/* ========================================== */}
       {/* TÍTULO DE LA PANTALLA */}
       {/* ========================================== */}
 
       <View style={styles.header}>
-
-        <Text style={styles.titulo}>
+        <Text style={[styles.titulo, { color: theme.text }]}>
           Aplicaciones
         </Text>
-
       </View>
+
       {/* ========================================== */}
       {/* OPCIONES DE APLICACIONES */}
       {/* ========================================== */}
@@ -58,21 +83,20 @@ export default function OpcionesAppsScreen() {
         {/* poder seleccionar nuevas aplicaciones. */}
 
         <Pressable
-          style={styles.botonOpcion}
+          style={[styles.botonOpcion, { backgroundColor: theme.btnAdd }]}
           onPress={() => router.push("/agregarapps")}
         >
-
           <Ionicons
-            name="add-circle-outline"
-            size={75}
-            color="#F8E9E9"
+            name="add-circle"
+            size={80}
+            color="#FFFFFF"
           />
 
           <Text style={styles.textoOpcion}>
             Añadir app
           </Text>
-
         </Pressable>
+
         {/* ========================================== */}
         {/* OPCIÓN: ELIMINAR APP */}
         {/* ========================================== */}
@@ -80,19 +104,18 @@ export default function OpcionesAppsScreen() {
         {/* mostraremos solamente las aplicaciones que */}
         {/* están actualmente agregadas a MobiAmigo. */}
         <Pressable
-          style={styles.botonOpcion}
+          style={[styles.botonOpcion, { backgroundColor: theme.btnDelete }]}
           onPress={() => router.push("/eliminarapps")}
         >
           <Ionicons
-            name="remove-circle-outline"
-            size={75}
-            color="#F8E9E9"
+            name="trash"
+            size={80}
+            color="#FFFFFF"
           />
 
           <Text style={styles.textoOpcion}>
             Eliminar app
           </Text>
-
         </Pressable>
 
       </View>
@@ -100,6 +123,7 @@ export default function OpcionesAppsScreen() {
     </SafeAreaView>
   );
 }
+
 // ==========================================
 // ESTILOS DE LA PANTALLA
 // ==========================================
@@ -109,17 +133,29 @@ const styles = StyleSheet.create({
   // Fondo principal de MobiAmigo
   container: {
     flex: 1,
-    backgroundColor: '#000040',
   },
   // ==========================================
-  // BOTÓN ATRÁS
+  // BARRA SUPERIOR Y BOTÓN ATRÁS
   // ==========================================
-
+  barraSuperior: {
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   botonAtras: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  textoBotonAtras: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginLeft: 8,
   },
   // ==========================================
   // ENCABEZADO
@@ -127,15 +163,14 @@ const styles = StyleSheet.create({
 
   header: {
     width: '100%',
-    height: 100,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   titulo: {
-    color: '#F8E9E9',
-    fontSize: 32,
-    fontWeight: '400',
+    fontSize: 34,
+    fontWeight: '800',
   },
   // ==========================================
   // CONTENEDOR DE LAS OPCIONES
@@ -152,18 +187,23 @@ const styles = StyleSheet.create({
   // ==========================================
 
   botonOpcion: {
-    width: '90%',
-    height: 180,
-    backgroundColor: '#493936',
-    borderRadius: 16,
+    width: '92%',
+    height: 190,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 25,
+    marginBottom: 28,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
 
   textoOpcion: {
-    color: '#F8E9E9',
-    fontSize: 28,
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '800',
     textAlign: 'center',
     marginTop: 12,
   },

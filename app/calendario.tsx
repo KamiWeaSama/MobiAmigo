@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   Alert, FlatList, Modal, ScrollView, StyleSheet,
-  Text, TextInput, TouchableOpacity, View
+  Text, TextInput, TouchableOpacity, useColorScheme, View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -40,6 +40,31 @@ interface Evento {
 
 export default function CalendarioScreen() {
   const router = useRouter();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+
+  // ==========================================
+  // PALETA DE COLORES (MODO CLARO / OSCURO AUTOMÁTICO)
+  // ==========================================
+
+  const theme = {
+    bg: isDark ? '#0F172A' : '#FFFDF9',
+    card: isDark ? '#1E293B' : '#FFFFFF',
+    cardBorder: isDark ? '#334155' : '#D6D3CD',
+    inputBg: isDark ? '#0F172A' : '#F3F4F6',
+    text: isDark ? '#F8FAFC' : '#111827',
+    subtext: isDark ? '#CBD5E1' : '#4B5563',
+    backBg: isDark ? '#1E293B' : '#E5E7EB',
+    backBorder: isDark ? '#334155' : '#D1D5DB',
+    primary: '#6D28D9',
+    accentBlue: '#1D4ED8',
+    success: '#15803D',
+    danger: '#DC2626',
+    inactiveBtn: isDark ? '#334155' : '#E5E7EB',
+    inactiveText: isDark ? '#CBD5E1' : '#374151',
+    hasEvBg: isDark ? '#312E81' : '#EDE9FE',
+  };
+
   const hoy = new Date(2026, 9, 25);
 
   // ==========================================
@@ -85,9 +110,9 @@ export default function CalendarioScreen() {
   // ==========================================
 
   const agregarEvento = () => {
-    if (!nombre.trim()) return Alert.alert('Error', 'Ingresa el nombre.');
+    if (!nombre.trim()) return Alert.alert('Error', 'Ingresa el nombre del evento.');
     const nuevo: Evento = {
-      id: Date.now().toString(), nombre, hora: `${hora}:${minuto}`,
+      id: Date.now().toString(), nombre: nombre.trim(), hora: `${hora}:${minuto}`,
       repiteSiempre: repSiemp, repiteSemanal: repSem, repiteMensual: repMen,
       dia: diaSel, mes, anio
     };
@@ -137,31 +162,50 @@ export default function CalendarioScreen() {
   // ==========================================
   // Se utiliza para seleccionar mes, año, hora y minuto.
 
-  const renderModalSelector = (tipo: string, titulo: string, data: any[], onSelect: (val: any) => void, fmt = (v: any) => v) => (
-    <Modal visible={modal === tipo} transparent animationType="fade" onRequestClose={() => setModal('nuevo')}>
-      <View style={s.overlay}>
-        <View style={[s.content, { maxHeight: '50%' }]}>
-          <Text style={s.modalTitle}>{titulo}</Text>
-          <FlatList data={data} keyExtractor={(i, idx) => idx.toString()} renderItem={({ item }) => (
-            <TouchableOpacity style={s.item} onPress={() => { onSelect(item); setModal('nuevo'); }}>
-              <Text style={s.itemText}>{fmt(item)}</Text>
+  const renderModalSelector = (tipo: string, titulo: string, data: any[], onSelect: (val: any) => void, fmt = (v: any) => v) => {
+    const volverA = (tipo === 'hora' || tipo === 'minuto') ? 'nuevo' : null;
+    return (
+      <Modal visible={modal === tipo} transparent animationType="fade" onRequestClose={() => setModal(volverA)}>
+        <View style={s.overlay}>
+          <View style={[s.content, { maxHeight: '60%', backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[s.modalTitle, { color: theme.text }]}>{titulo}</Text>
+            <FlatList data={data} keyExtractor={(i, idx) => idx.toString()} renderItem={({ item }) => (
+              <TouchableOpacity style={[s.item, { borderBottomColor: theme.cardBorder }]} onPress={() => { onSelect(item); setModal(volverA); }}>
+                <Text style={[s.itemText, { color: theme.text }]}>{fmt(item)}</Text>
+              </TouchableOpacity>
+            )} />
+            <TouchableOpacity style={[s.closeBtn, { backgroundColor: theme.danger }]} onPress={() => setModal(volverA)}>
+              <Text style={s.closeText}>Cancelar</Text>
             </TouchableOpacity>
-          )} />
-          <TouchableOpacity style={s.closeBtn} onPress={() => setModal('nuevo')}><Text style={s.closeText}>Cancelar</Text></TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  };
 
   return (
-    <SafeAreaView style={s.container}>
+    <SafeAreaView style={[s.container, { backgroundColor: theme.bg }]}>
       {/* ========================================== */}
       {/* ENCABEZADO DE LA PANTALLA */}
       {/* ========================================== */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#F8E9E9" /></TouchableOpacity>
-        <Text style={s.title}>Calendario</Text>
-        <TouchableOpacity onPress={() => setModal('lista')}><Ionicons name="list" size={24} color="#F8E9E9" /></TouchableOpacity>
+        <TouchableOpacity
+          style={[s.backBtn, { backgroundColor: theme.backBg, borderColor: theme.backBorder }]}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={26} color={theme.text} />
+          <Text style={[s.backBtnText, { color: theme.text }]}>Volver</Text>
+        </TouchableOpacity>
+
+        <Text style={[s.title, { color: theme.text }]}>Calendario</Text>
+
+        <TouchableOpacity
+          style={[s.listBtn, { backgroundColor: theme.primary }]}
+          onPress={() => setModal('lista')}
+        >
+          <Ionicons name="list" size={24} color="#FFFFFF" />
+          <Text style={s.listBtnText}>Ver todos</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -169,28 +213,73 @@ export default function CalendarioScreen() {
         {/* SELECTORES DE MES Y AÑO */}
         {/* ========================================== */}
         <View style={s.selectors}>
-          <TouchableOpacity style={s.selBtn} onPress={() => setModal('mes')}><Text style={s.selText}>{MESES[mes]}</Text><Ionicons name="chevron-down" size={18} color="#F8E9E9" /></TouchableOpacity>
-          <TouchableOpacity style={s.selBtn} onPress={() => setModal('anio')}><Text style={s.selText}>{anio}</Text><Ionicons name="chevron-down" size={18} color="#F8E9E9" /></TouchableOpacity>
+          <TouchableOpacity
+            style={[s.selBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+            onPress={() => setModal('mes')}
+          >
+            <Text style={[s.selText, { color: theme.text }]}>{MESES[mes]}</Text>
+            <Ionicons name="chevron-down" size={22} color={theme.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.selBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+            onPress={() => setModal('anio')}
+          >
+            <Text style={[s.selText, { color: theme.text }]}>{anio}</Text>
+            <Ionicons name="chevron-down" size={22} color={theme.text} />
+          </TouchableOpacity>
         </View>
 
         {/* ========================================== */}
         {/* CABECERA DE DÍAS DE LA SEMANA */}
         {/* ========================================== */}
-        <View style={s.row}>{DIAS_SEMANA.map((d, i) => <Text key={i} style={s.weekDay}>{d}</Text>)}</View>
+        <View style={s.row}>
+          {DIAS_SEMANA.map((d, i) => (
+            <Text key={i} style={[s.weekDay, { color: theme.text }]}>{d}</Text>
+          ))}
+        </View>
 
         {/* ========================================== */}
         {/* CUADRÍCULA DE DÍAS DEL MES */}
         {/* ========================================== */}
-        <View style={s.grid}>
+        <View style={[s.grid, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
           {diasMes.map((d, i) => {
             const ev = d ? eventos.find(e => aplicaFecha(e, d, mes, anio)) : null;
             const sel = d === diaSel;
             return (
-              <TouchableOpacity key={i} style={[s.cell, !d && s.empty, sel && s.selCell, ev && s.hasEv]} disabled={!d} onPress={() => d && setDiaSel(d)}>
+              <TouchableOpacity
+                key={i}
+                style={[
+                  s.cell,
+                  !d && s.empty,
+                  ev && { backgroundColor: theme.hasEvBg, borderRadius: 10, borderWidth: 1.5, borderColor: theme.primary },
+                  sel && { backgroundColor: theme.primary, borderRadius: 10 },
+                ]}
+                disabled={!d}
+                onPress={() => d && setDiaSel(d)}
+              >
                 {d && (
                   <View style={{ alignItems: 'center', width: '100%' }}>
-                    <Text style={[s.dayText, (sel || ev) && s.selDayText]}>{d}</Text>
-                    {ev && <Text style={s.miniEv} numberOfLines={1}>{ev.nombre}</Text>}
+                    <Text
+                      style={[
+                        s.dayText,
+                        { color: sel ? '#FFFFFF' : theme.text },
+                        (sel || ev) && s.selDayText,
+                      ]}
+                    >
+                      {d}
+                    </Text>
+                    {ev && (
+                      <Text
+                        style={[
+                          s.miniEv,
+                          { color: sel ? '#FFFFFF' : theme.primary },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        • {ev.nombre}
+                      </Text>
+                    )}
                   </View>
                 )}
               </TouchableOpacity>
@@ -201,21 +290,51 @@ export default function CalendarioScreen() {
         {/* ========================================== */}
         {/* LISTA DE EVENTOS DEL DÍA SELECCIONADO */}
         {/* ========================================== */}
-        <View style={{ marginTop: 20 }}>
+        <View style={{ marginTop: 22 }}>
           <View style={s.evHeader}>
-            <Text style={s.evTitle}>Eventos del {diaSel} de {MESES[mes]}</Text>
-            <TouchableOpacity style={s.addBtn} onPress={() => setModal('nuevo')}><Ionicons name="add" size={20} color="#FFF" /><Text style={{ color: '#FFF', marginLeft: 4 }}>Añadir</Text></TouchableOpacity>
+            <Text style={[s.evTitle, { color: theme.text }]}>
+              Eventos del {diaSel} de {MESES[mes]}
+            </Text>
+            <TouchableOpacity
+              style={[s.addBtn, { backgroundColor: theme.success }]}
+              onPress={() => setModal('nuevo')}
+            >
+              <Ionicons name="add-circle" size={24} color="#FFF" />
+              <Text style={s.addBtnText}>Añadir</Text>
+            </TouchableOpacity>
           </View>
+
           {eventosDelDia.length === 0 ? (
-            <View style={s.card}><Ionicons name="calendar-outline" size={24} color="#006EDB" /><Text style={{ color: '#F8E9E9', marginLeft: 10 }}>Sin eventos.</Text></View>
+            <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+              <Ionicons name="calendar-outline" size={28} color={theme.primary} />
+              <Text style={{ color: theme.text, marginLeft: 12, fontSize: 18, fontWeight: '600' }}>
+                Sin eventos programados para este día.
+              </Text>
+            </View>
           ) : (
             eventosDelDia.map(e => (
-              <View key={e.id} style={s.cardEv}>
+              <View
+                key={e.id}
+                style={[
+                  s.cardEv,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.cardBorder,
+                    borderLeftColor: theme.primary,
+                  },
+                ]}
+              >
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#F8E9E9', fontSize: 16, fontWeight: '500' }}>{e.nombre}</Text>
-                  <Text style={{ color: '#aaa', fontSize: 13, marginTop: 2 }}>🕒 {e.hora} {e.repiteSiempre ? '• Siempre' : e.repiteSemanal ? '• Semanal' : e.repiteMensual ? '• Mensual' : ''}</Text>
+                  <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700' }}>
+                    {e.nombre}
+                  </Text>
+                  <Text style={{ color: theme.subtext, fontSize: 16, marginTop: 4, fontWeight: '500' }}>
+                    🕒 {e.hora} hrs {e.repiteSiempre ? '• Todos los días' : e.repiteSemanal ? '• Cada semana' : e.repiteMensual ? '• Cada mes' : ''}
+                  </Text>
                 </View>
-                <TouchableOpacity onPress={() => eliminarEvento(e.id)}><Ionicons name="trash-outline" size={20} color="#ff4444" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => eliminarEvento(e.id)} style={{ padding: 6 }}>
+                  <Ionicons name="trash" size={26} color={theme.danger} />
+                </TouchableOpacity>
               </View>
             ))
           )}
@@ -227,31 +346,85 @@ export default function CalendarioScreen() {
       {/* ========================================== */}
       <Modal visible={modal === 'nuevo'} transparent animationType="slide" onRequestClose={() => setModal(null)}>
         <View style={s.overlay}>
-          <View style={[s.content, { maxHeight: '90%' }]}>
+          <View style={[s.content, { maxHeight: '92%', backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={s.modalTitle}>Nuevo Evento ({diaSel} de {MESES[mes]})</Text>
-              <Text style={s.label}>Nombre:</Text>
-              <TextInput style={s.input} placeholder="Ej. Reunión" placeholderTextColor="#888" value={nombre} onChangeText={setNombre} />
+              <Text style={[s.modalTitle, { color: theme.text }]}>
+                Nuevo Evento ({diaSel} de {MESES[mes]})
+              </Text>
+
+              <Text style={[s.label, { color: theme.text }]}>Nombre del evento:</Text>
+              <TextInput
+                style={[
+                  s.input,
+                  { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.cardBorder },
+                ]}
+                placeholder="Ej. Control médico, Reunión..."
+                placeholderTextColor={theme.subtext}
+                value={nombre}
+                onChangeText={setNombre}
+              />
               
-              <Text style={s.label}>Hora:</Text>
+              <Text style={[s.label, { color: theme.text }]}>Hora:</Text>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <TouchableOpacity style={[s.timeBtn, { flex: 1, marginRight: 8 }]} onPress={() => setModal('hora')}><Text style={{ color: '#F8E9E9' }}>{hora}</Text></TouchableOpacity>
-                <TouchableOpacity style={[s.timeBtn, { flex: 1, marginLeft: 8 }]} onPress={() => setModal('minuto')}><Text style={{ color: '#F8E9E9' }}>{minuto}</Text></TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    s.timeBtn,
+                    { flex: 1, marginRight: 8, backgroundColor: theme.inputBg, borderColor: theme.cardBorder },
+                  ]}
+                  onPress={() => setModal('hora')}
+                >
+                  <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700' }}>{hora} hrs</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    s.timeBtn,
+                    { flex: 1, marginLeft: 8, backgroundColor: theme.inputBg, borderColor: theme.cardBorder },
+                  ]}
+                  onPress={() => setModal('minuto')}
+                >
+                  <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700' }}>{minuto} min</Text>
+                </TouchableOpacity>
               </View>
 
               {[['Siempre', repSiemp, setRepSiemp], ['Semanal', repSem, setRepSem], ['Mensual', repMen, setRepMen]].map(([label, val, set]: any, idx) => (
                 <View key={idx}>
-                  <Text style={s.label}>¿Repetir {label.toLowerCase()}?</Text>
+                  <Text style={[s.label, { color: theme.text }]}>¿Repetir {label.toLowerCase()}?</Text>
                   <View style={{ flexDirection: 'row' }}>
-                    <TouchableOpacity style={[s.repBtn, val && s.repAct]} onPress={() => set(true)}><Text style={s.repText}>Sí</Text></TouchableOpacity>
-                    <TouchableOpacity style={[s.repBtn, !val && s.repAct]} onPress={() => set(false)}><Text style={s.repText}>No</Text></TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        s.repBtn,
+                        { backgroundColor: val ? theme.success : theme.inactiveBtn },
+                      ]}
+                      onPress={() => set(true)}
+                    >
+                      <Text style={[s.repText, { color: val ? '#FFFFFF' : theme.inactiveText }]}>Sí</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        s.repBtn,
+                        { backgroundColor: !val ? theme.accentBlue : theme.inactiveBtn },
+                      ]}
+                      onPress={() => set(false)}
+                    >
+                      <Text style={[s.repText, { color: !val ? '#FFFFFF' : theme.inactiveText }]}>No</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))}
 
-              <View style={{ flexDirection: 'row', marginTop: 20 }}>
-                <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#493936' }]} onPress={() => setModal(null)}><Text style={{ color: '#F8E9E9' }}>Cancelar</Text></TouchableOpacity>
-                <TouchableOpacity style={[s.actionBtn, { backgroundColor: '#006EDB' }]} onPress={agregarEvento}><Text style={{ color: '#F8E9E9' }}>Guardar</Text></TouchableOpacity>
+              <View style={{ flexDirection: 'row', marginTop: 24 }}>
+                <TouchableOpacity
+                  style={[s.actionBtn, { backgroundColor: theme.danger }]}
+                  onPress={() => setModal(null)}
+                >
+                  <Text style={s.actionBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.actionBtn, { backgroundColor: theme.success }]}
+                  onPress={agregarEvento}
+                >
+                  <Text style={s.actionBtnText}>Guardar</Text>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </View>
@@ -263,20 +436,44 @@ export default function CalendarioScreen() {
       {/* ========================================== */}
       <Modal visible={modal === 'lista'} transparent animationType="slide" onRequestClose={() => setModal(null)}>
         <View style={s.overlay}>
-          <View style={[s.content, { maxHeight: '85%' }]}>
-            <Text style={s.modalTitle}>Todos los Eventos</Text>
-            {eventos.length === 0 ? <Text style={{ color: '#F8E9E9', textAlign: 'center', margin: 20 }}>No hay eventos.</Text> : (
+          <View style={[s.content, { maxHeight: '85%', backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[s.modalTitle, { color: theme.text }]}>Todos los Eventos</Text>
+            {eventos.length === 0 ? (
+              <Text style={{ color: theme.text, textAlign: 'center', margin: 20, fontSize: 18 }}>
+                No hay eventos guardados.
+              </Text>
+            ) : (
               <FlatList data={eventos} keyExtractor={i => i.id} renderItem={({ item }) => (
-                <View style={s.cardEv}>
+                <View
+                  style={[
+                    s.cardEv,
+                    {
+                      backgroundColor: theme.inputBg,
+                      borderColor: theme.cardBorder,
+                      borderLeftColor: theme.primary,
+                    },
+                  ]}
+                >
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#F8E9E9', fontWeight: '500' }}>{item.nombre}</Text>
-                    <Text style={{ color: '#aaa', fontSize: 12 }}>{item.dia} de {MESES[item.mes]} {item.anio} - {item.hora}</Text>
+                    <Text style={{ color: theme.text, fontSize: 19, fontWeight: '700' }}>
+                      {item.nombre}
+                    </Text>
+                    <Text style={{ color: theme.subtext, fontSize: 15, marginTop: 4, fontWeight: '500' }}>
+                      📅 {item.dia} de {MESES[item.mes]} {item.anio} • 🕒 {item.hora} hrs
+                    </Text>
                   </View>
-                  <TouchableOpacity onPress={() => eliminarEvento(item.id)}><Ionicons name="trash-outline" size={20} color="#ff4444" /></TouchableOpacity>
+                  <TouchableOpacity onPress={() => eliminarEvento(item.id)} style={{ padding: 6 }}>
+                    <Ionicons name="trash" size={26} color={theme.danger} />
+                  </TouchableOpacity>
                 </View>
               )} />
             )}
-            <TouchableOpacity style={s.closeBtn} onPress={() => setModal(null)}><Text style={s.closeText}>Cerrar</Text></TouchableOpacity>
+            <TouchableOpacity
+              style={[s.closeBtn, { backgroundColor: theme.primary }]}
+              onPress={() => setModal(null)}
+            >
+              <Text style={s.closeText}>Cerrar</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -297,40 +494,113 @@ export default function CalendarioScreen() {
 // ==========================================
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000040' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 60 },
-  title: { color: '#F8E9E9', fontSize: 24 },
+  container: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  backBtnText: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  title: { fontSize: 24, fontWeight: '800' },
+  listBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  listBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
   scroll: { paddingBottom: 30, paddingHorizontal: 16 },
-  selectors: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 15 },
-  selBtn: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0c0c5a', borderRadius: 12, padding: 14, marginHorizontal: 4 },
-  selText: { color: '#F8E9E9', fontSize: 16 },
-  row: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
-  weekDay: { color: '#F8E9E9', fontSize: 14, fontWeight: 'bold', width: '14%', textAlign: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: '#0c0c5a', borderRadius: 14, padding: 10 },
-  cell: { width: '14.28%', height: 65, alignItems: 'center', paddingTop: 6, marginBottom: 6 },
+  selectors: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 14 },
+  selBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 14,
+    marginHorizontal: 4,
+  },
+  selText: { fontSize: 19, fontWeight: '700' },
+  row: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
+  weekDay: { fontSize: 16, fontWeight: '800', width: '14%', textAlign: 'center' },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 8,
+  },
+  cell: {
+    width: '14.28%',
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   empty: { backgroundColor: 'transparent' },
-  selCell: { backgroundColor: '#1a1a8c', borderRadius: 8 },
-  hasEv: { backgroundColor: '#141452', borderRadius: 8, borderWidth: 1, borderColor: '#006EDB' },
-  dayText: { color: '#F8E9E9', fontSize: 14 },
-  selDayText: { fontWeight: 'bold', color: '#FFF' },
-  miniEv: { color: '#80bfff', fontSize: 9, textAlign: 'center', marginTop: 2 },
-  evHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  evTitle: { color: '#F8E9E9', fontSize: 16 },
-  addBtn: { flexDirection: 'row', backgroundColor: '#006EDB', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
-  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0c0c5a', padding: 16, borderRadius: 14 },
-  cardEv: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0c0c5a', padding: 14, borderRadius: 14, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#006EDB' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  content: { width: '85%', backgroundColor: '#0c0c5a', borderRadius: 16, padding: 20 },
-  modalTitle: { color: '#F8E9E9', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
-  label: { color: '#F8E9E9', fontSize: 14, marginTop: 10, marginBottom: 4 },
-  input: { backgroundColor: '#1a1a7a', color: '#F8E9E9', padding: 12, borderRadius: 8, fontSize: 16 },
-  timeBtn: { backgroundColor: '#1a1a7a', padding: 12, borderRadius: 8, alignItems: 'center' },
-  repBtn: { flex: 1, backgroundColor: '#493936', paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginHorizontal: 3 },
-  repAct: { backgroundColor: '#006EDB' },
-  repText: { color: '#F8E9E9', fontSize: 13, fontWeight: 'bold' },
-  actionBtn: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginHorizontal: 5 },
-  item: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1a7a', alignItems: 'center' },
-  itemText: { color: '#F8E9E9', fontSize: 16 },
-  closeBtn: { marginTop: 15, backgroundColor: '#493936', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  closeText: { color: '#F8E9E9', fontSize: 16 },
+  dayText: { fontSize: 17, fontWeight: '600' },
+  selDayText: { fontWeight: '800' },
+  miniEv: { fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 2 },
+  evHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  evTitle: { fontSize: 20, fontWeight: '800', flex: 1, marginRight: 8 },
+  addBtn: {
+    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  addBtnText: { color: '#FFF', marginLeft: 6, fontSize: 17, fontWeight: '700' },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  cardEv: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderLeftWidth: 7,
+  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center' },
+  content: { width: '90%', borderRadius: 20, borderWidth: 1.5, padding: 20 },
+  modalTitle: { fontSize: 22, fontWeight: '800', textAlign: 'center', marginBottom: 16 },
+  label: { fontSize: 18, fontWeight: '700', marginTop: 12, marginBottom: 6 },
+  input: { padding: 14, borderRadius: 12, borderWidth: 1.5, fontSize: 19 },
+  timeBtn: { padding: 14, borderRadius: 12, borderWidth: 1.5, alignItems: 'center' },
+  repBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginHorizontal: 4 },
+  repText: { fontSize: 17, fontWeight: '800' },
+  actionBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginHorizontal: 5 },
+  actionBtnText: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  item: { paddingVertical: 14, borderBottomWidth: 1, alignItems: 'center' },
+  itemText: { fontSize: 20, fontWeight: '700' },
+  closeBtn: { marginTop: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  closeText: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
 });
