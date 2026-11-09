@@ -353,15 +353,6 @@ export default function App() {
     }
   };
 
-  const eliminarContacto = async (id: string) => {
-    try {
-      const nuevaLista = listaContactos.filter((c) => c.id !== id);
-      setListaContactos(nuevaLista);
-      await AsyncStorage.setItem('@mis_contactos', JSON.stringify(nuevaLista));
-    } catch (error) {
-      console.log('Error al eliminar contacto:', error);
-    }
-  };
 
   const hayNotificaciones =
     listaRecordatorios.length > 0 || eventosCercanos.length > 0;
@@ -495,13 +486,6 @@ export default function App() {
                   ]}
                   onPress={() => llamarContacto(contacto)}
                 >
-                  <TouchableOpacity
-                    style={styles.botonQuitarMini}
-                    onPress={() => eliminarContacto(contacto.id)}
-                  >
-                    <Ionicons name="close-circle" size={20} color={theme.danger} />
-                  </TouchableOpacity>
-
                   <View style={[styles.avatarContacto, { backgroundColor: theme.btnContactos }]}>
                     <Ionicons name="call" size={26} color="#FFFFFF" />
                   </View>
@@ -808,12 +792,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
-  botonQuitarMini: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    zIndex: 5,
-  },
+
   avatarContacto: {
     width: 50,
     height: 50,
