@@ -386,16 +386,19 @@ export default function App() {
       <ScrollView contentContainerStyle={styles.scrollGeneral} showsVerticalScrollIndicator={false}>
 
         {/* ========================================== */}
-        {/* ENCABEZADO */}
+        {/* ENCABEZADO CON LOGO DE LA APLICACIÓN */}
         {/* ========================================== */}
 
         <View style={styles.header}>
-          <Text style={[styles.titulo, { color: theme.text }]}>
-            MobiAmigo
-          </Text>
-          <Text style={[styles.subtituloHeader, { color: theme.subtext }]}>
-            Tu asistente fácil y rápido
-          </Text>
+          <View style={styles.filaLogoTitulo}>
+            <Image
+              source={require('../assets/images/icon.png')}
+              style={styles.logoHeader}
+            />
+            <Text style={[styles.titulo, { color: theme.text }]}>
+              MobiAmigo
+            </Text>
+          </View>
         </View>
 
         {/* ========================================== */}
@@ -589,6 +592,7 @@ export default function App() {
             </View>
           </View>
         )}
+<<<<<<< HEAD
 
         {/* ========================================== */}
         {/* BOTONES INFERIORES (FILA 1) */}
@@ -679,7 +683,95 @@ export default function App() {
             </Text>
           </Pressable>
         </View>
+=======
+>>>>>>> 8693be7e30b39d398d30c2c99d3772bc8fd276d9
       </ScrollView>
+
+      {/* ========================================== */}
+      {/* BARRA INFERIOR RECTANGULAR CON LOS 4 BOTONES */}
+      {/* ========================================== */}
+
+      <View
+        style={[
+          styles.barraInferior,
+          {
+            backgroundColor: theme.card,
+            borderTopColor: theme.cardBorder,
+          },
+        ]}
+      >
+        {/* ========================================== */}
+        {/* BOTÓN AÑADIR APPS */}
+        {/* ========================================== */}
+
+        <Pressable
+          style={[styles.botonBarra, { backgroundColor: theme.btnApps }]}
+          onPress={gestionarAplicaciones}
+        >
+          <Ionicons
+            name="apps"
+            size={30}
+            color="#FFFFFF"
+          />
+          <Text style={styles.textoBotonBarra} numberOfLines={2}>
+            Añadir Apps
+          </Text>
+        </Pressable>
+
+        {/* ========================================== */}
+        {/* BOTÓN AÑADIR RECORDATORIO */}
+        {/* ========================================== */}
+
+        <Pressable
+          style={[styles.botonBarra, { backgroundColor: theme.btnRecordatorio }]}
+          onPress={() => router.push("/agregarecordatorio")}
+        >
+          <Ionicons
+            name="notifications"
+            size={30}
+            color="#FFFFFF"
+          />
+          <Text style={styles.textoBotonBarra} numberOfLines={2}>
+            Recordatorio
+          </Text>
+        </Pressable>
+
+        {/* ========================================== */}
+        {/* BOTÓN AGREGAR CONTACTOS */}
+        {/* ========================================== */}
+
+        <Pressable
+          style={[styles.botonBarra, { backgroundColor: theme.btnContactos }]}
+          onPress={getContacts}
+        >
+          <Ionicons
+            name="call"
+            size={30}
+            color="#FFFFFF"
+          />
+          <Text style={styles.textoBotonBarra} numberOfLines={2}>
+            Contactos
+          </Text>
+        </Pressable>
+
+        {/* ========================================== */}
+        {/* BOTÓN CALENDARIO */}
+        {/* ========================================== */}
+
+        <Pressable
+          style={[styles.botonBarra, { backgroundColor: theme.btnCalendario }]}
+          onPress={() => router.push('/calendario')}
+        >
+          <Ionicons
+            name="calendar"
+            size={30}
+            color="#FFFFFF"
+          />
+          <Text style={styles.textoBotonBarra} numberOfLines={2}>
+            Calendario
+          </Text>
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
@@ -699,26 +791,33 @@ const styles = StyleSheet.create({
   // SCROLL GENERAL
   // ==========================================
   scrollGeneral: {
-    paddingBottom: 32,
+    paddingBottom: 20,
   },
   // ==========================================
   // ENCABEZADO
   // ==========================================
   header: {
     width: '100%',
-    paddingVertical: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  filaLogoTitulo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoHeader: {
+    width: 54,
+    height: 54,
+    borderRadius: 14,
+    marginRight: 12,
+  },
   titulo: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
     letterSpacing: 0.5,
-  },
-  subtituloHeader: {
-    fontSize: 16,
-    marginTop: 2,
-    fontWeight: '500',
   },
   // ==========================================
   // TÍTULOS DE SECCIÓN
@@ -852,41 +951,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   // ==========================================
-  // CONTENEDOR DE BOTONES INFERIORES
+  // BARRA INFERIOR RECTANGULAR CON LOS 4 BOTONES
   // ==========================================
-  contenedorBotones: {
+  barraInferior: {
+    width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 14,
-    width: '100%',
-  },
-  // ==========================================
-  // BOTÓN INFERIOR
-  // ==========================================
-  boton: {
-    width: '48%',
-    minHeight: 155,
-    borderRadius: 20,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 16,
-    elevation: 4,
+    paddingVertical: 10,
+    borderTopWidth: 2,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.15,
     shadowRadius: 4,
   },
   // ==========================================
-  // TEXTO DE LOS BOTONES
+  // BOTÓN DE LA BARRA INFERIOR
   // ==========================================
-  textoBoton: {
+  botonBarra: {
+    width: '23.5%',
+    minHeight: 82,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  // ==========================================
+  // TEXTO DE LOS BOTONES DE LA BARRA
+  // ==========================================
+  textoBotonBarra: {
     color: '#FFFFFF',
-    fontSize: 21,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 5,
   },
 });
