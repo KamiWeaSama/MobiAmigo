@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-const ANIOS = Array.from({ length: 21 }, (_, i) => new Date(2026, 9, 25).getFullYear() - 10 + i);
+const ANIOS = Array.from({ length: 21 }, (_, i) => new Date().getFullYear() - 10 + i);
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTOS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
@@ -65,7 +65,7 @@ export default function CalendarioScreen() {
     hasEvBg: isDark ? '#312E81' : '#EDE9FE',
   };
 
-  const hoy = new Date(2026, 9, 25);
+  const hoy = new Date();
 
   // ==========================================
   // ESTADOS DE FECHA Y LISTA DE EVENTOS
