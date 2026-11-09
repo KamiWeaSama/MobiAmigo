@@ -15,10 +15,13 @@ import {
   Text,
   TouchableOpacity,
   useColorScheme,
-  View
+  View,
+  PermissionsAndroid,
+  Platform  
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { agregarContactoDesdeTelefono, leerContactos, type ContactInfo} from '../utils/contactos';
+import { startActivityAsync } from 'expo-intent-launcher';
 
 
 // ==========================================
@@ -346,12 +349,33 @@ export default function App() {
   // LLAMAR Y ELIMINAR CONTACTO
   // ==========================================
 
-  const llamarContacto = (contacto: ContactInfo) => {
-    if (contacto.phoneNumber) {
-      const numeroLimpio = contacto.phoneNumber.replace(/[^\d+]/g, '');
-      Linking.openURL(`tel:${numeroLimpio}`);
+ const llamarContacto = async (contacto: ContactInfo) => {
+  if (!contacto.phoneNumber) return;
+
+  const numeroLimpio = contacto.phoneNumber.replace(/[^\d+]/g, '');
+
+  try {
+    if (Platform.OS === 'android') {
+      // Android pide permiso para llamar directo
+      const permiso = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CALL_PHONE
+      );
+
+      if (permiso === PermissionsAndroid.RESULTS.GRANTED) {
+        // Aqui llama de inmediato
+        await startActivityAsync('android.intent.action.CALL', {
+          data: `tel:${numeroLimpio}`,
+        });
+        return;
+      }
     }
-  };
+
+    // Si no dio el permiso, abre el marcador con el número
+    await Linking.openURL(`tel:${numeroLimpio}`);
+  } catch (error) {
+    console.log('Error al llamar:', error);
+  }
+};
 
 
   const hayNotificaciones =
