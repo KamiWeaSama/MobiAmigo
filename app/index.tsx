@@ -418,16 +418,19 @@ export default function App() {
       <ScrollView contentContainerStyle={styles.scrollGeneral} showsVerticalScrollIndicator={false}>
 
         {/* ========================================== */}
-        {/* ENCABEZADO */}
+        {/* ENCABEZADO CON LOGO DE LA APLICACIÓN */}
         {/* ========================================== */}
 
         <View style={styles.header}>
-          <Text style={[styles.titulo, { color: theme.text }]}>
-            MobiAmigo
-          </Text>
-          <Text style={[styles.subtituloHeader, { color: theme.subtext }]}>
-            Tu asistente fácil y rápido
-          </Text>
+          <View style={styles.filaLogoTitulo}>
+            <Image
+              source={require('../assets/images/icon.png')}
+              style={styles.logoHeader}
+            />
+            <Text style={[styles.titulo, { color: theme.text }]}>
+              MobiAmigo
+            </Text>
+          </View>
         </View>
 
         {/* ========================================== */}
@@ -741,19 +744,26 @@ const styles = StyleSheet.create({
   // ==========================================
   header: {
     width: '100%',
-    paddingVertical: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  filaLogoTitulo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoHeader: {
+    width: 54,
+    height: 54,
+    borderRadius: 14,
+    marginRight: 12,
+  },
   titulo: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
     letterSpacing: 0.5,
-  },
-  subtituloHeader: {
-    fontSize: 16,
-    marginTop: 2,
-    fontWeight: '500',
   },
   // ==========================================
   // TÍTULOS DE SECCIÓN
