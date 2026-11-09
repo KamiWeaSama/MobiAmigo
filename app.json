@@ -22,7 +22,7 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.QUERY_ALL_PACKAGES",
-        "android.permission.QUERY_ALL_PACKAGES"
+        "android.permission.CALL_PHONE"
       ],
       "package": "com.anonymous.MobiAmigo"
     },
