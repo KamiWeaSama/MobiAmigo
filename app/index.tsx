@@ -600,13 +600,6 @@ export default function App() {
                   ]}
                   onPress={() => llamarContacto(contacto)}
                 >
-                  <TouchableOpacity
-                    style={styles.botonQuitarMini}
-                    onPress={() => eliminarContacto(contacto.id)}
-                  >
-                    <Ionicons name="close-circle" size={20} color={theme.danger} />
-                  </TouchableOpacity>
-
                   <View style={[styles.avatarContacto, { backgroundColor: theme.btnContactos }]}>
                     <Ionicons name="call" size={26} color="#FFFFFF" />
                   </View>
