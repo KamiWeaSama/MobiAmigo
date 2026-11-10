@@ -4,11 +4,9 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as contacts from 'expo-contacts';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-  Alert,
   Image,
   Linking,
   Modal,
@@ -18,9 +16,14 @@ import {
   Text,
   TouchableOpacity,
   useColorScheme,
-  View
+  View,
+  PermissionsAndroid,
+  Platform  
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { agregarContactoDesdeTelefono, leerContactos, type ContactInfo} from '../utils/contactos';
+import { startActivityAsync } from 'expo-intent-launcher';
+
 
 // ==========================================
 // INFORMACIÓN DE LAS APLICACIONES, CONTACTOS Y EVENTOS
@@ -30,12 +33,6 @@ interface AppInfo {
   label: string;
   packageName: string;
   icon?: string;
-}
-
-interface ContactInfo {
-  id: string;
-  name: string;
-  phoneNumber?: string;
 }
 
 interface EventoCalendario {
@@ -415,79 +412,50 @@ export default function App() {
     }
   };
 
-  // ==========================================
-  // OBTENER Y GUARDAR CONTACTOS DEL DISPOSITIVO
-  // ==========================================
+ const gestionarContactos = async () => {
+  if (listaContactos.length === 0) {
+    const agregado = await agregarContactoDesdeTelefono();
 
-  const getContacts = async () => {
-    try {
-      const { status } = await contacts.requestPermissionsAsync();
-
-      if (status === 'granted') {
-        // EXPLICACIÓN: Añadimos 'as any' al final para que permita usar '.contact' sin errores
-        const resultadoPicker = (await contacts.presentContactPickerAsync()) as any;
-        
-        if (resultadoPicker) {
-          const datosContacto = resultadoPicker.contact || resultadoPicker;
-
-          if (datosContacto) {
-            // EXPLICACIÓN: Corregimos la ortografía, usamos [0] para el primer elemento y ?.number para su valor
-            const numeroBruto = datosContacto.phoneNumbers?.[0]?.number;
-            const nombreContacto =
-              datosContacto.name ||
-              [datosContacto.firstName, datosContacto.lastName].filter(Boolean).join(' ') ||
-              'Contacto';
-
-            console.log('Número obtenido:', numeroBruto);
-
-            if (!numeroBruto) {
-              Alert.alert('Sin número', 'El contacto seleccionado no tiene un número de teléfono.');
-              return;
-            }
-
-            const nuevoContacto: ContactInfo = {
-              id: datosContacto.id || Date.now().toString(),
-              name: nombreContacto,
-              phoneNumber: numeroBruto,
-            };
-
-            const yaExiste = listaContactos.some(
-              (c) => c.phoneNumber === nuevoContacto.phoneNumber && c.name === nuevoContacto.name
-            );
-
-            if (!yaExiste) {
-              const nuevaLista = [...listaContactos, nuevoContacto];
-              setListaContactos(nuevaLista);
-              await AsyncStorage.setItem('@mis_contactos', JSON.stringify(nuevaLista));
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.log('Error:', error);
+    if (agregado) {
+      setListaContactos(await leerContactos());
     }
-  };
+  } else {
+    router.push('/opcionescontactos');
+  }
+};
 
   // ==========================================
   // LLAMAR Y ELIMINAR CONTACTO
   // ==========================================
 
-  const llamarContacto = (contacto: ContactInfo) => {
-    if (contacto.phoneNumber) {
-      const numeroLimpio = contacto.phoneNumber.replace(/[^\d+]/g, '');
-      Linking.openURL(`tel:${numeroLimpio}`);
-    }
-  };
+ const llamarContacto = async (contacto: ContactInfo) => {
+  if (!contacto.phoneNumber) return;
 
-  const eliminarContacto = async (id: string) => {
-    try {
-      const nuevaLista = listaContactos.filter((c) => c.id !== id);
-      setListaContactos(nuevaLista);
-      await AsyncStorage.setItem('@mis_contactos', JSON.stringify(nuevaLista));
-    } catch (error) {
-      console.log('Error al eliminar contacto:', error);
+  const numeroLimpio = contacto.phoneNumber.replace(/[^\d+]/g, '');
+
+  try {
+    if (Platform.OS === 'android') {
+      // Android pide permiso para llamar directo
+      const permiso = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CALL_PHONE
+      );
+
+      if (permiso === PermissionsAndroid.RESULTS.GRANTED) {
+        // Aqui llama de inmediato
+        await startActivityAsync('android.intent.action.CALL', {
+          data: `tel:${numeroLimpio}`,
+        });
+        return;
+      }
     }
-  };
+
+    // Si no dio el permiso, abre el marcador con el número
+    await Linking.openURL(`tel:${numeroLimpio}`);
+  } catch (error) {
+    console.log('Error al llamar:', error);
+  }
+};
+
 
   const hayNotificaciones =
     listaRecordatorios.length > 0 || eventosCercanos.length > 0;
@@ -777,7 +745,7 @@ export default function App() {
 
         <Pressable
           style={[styles.botonBarra, { backgroundColor: theme.btnContactos }]}
-          onPress={getContacts}
+          onPress={gestionarContactos}
         >
           <Ionicons
             name="call"
@@ -1480,12 +1448,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
-  botonQuitarMini: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    zIndex: 5,
-  },
+
   avatarContacto: {
     width: 50,
     height: 50,
