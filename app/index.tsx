@@ -11,6 +11,7 @@ import {
   Alert,
   Image,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -93,6 +94,10 @@ export default function App() {
   // Lista de contactos guardados
   const [listaContactos, setListaContactos] =
     useState<ContactInfo[]>([]);
+
+  // Estado para el menú desplegable (☰) y el modal de "Info"
+  const [menuAbierto, setMenuAbierto] = useState<boolean>(false);
+  const [modalInfoVisible, setModalInfoVisible] = useState<boolean>(false);
 
   // ==========================================
   // CARGAR DATOS GUARDADOS
@@ -418,20 +423,70 @@ export default function App() {
       <ScrollView contentContainerStyle={styles.scrollGeneral} showsVerticalScrollIndicator={false}>
 
         {/* ========================================== */}
-        {/* ENCABEZADO CON LOGO DE LA APLICACIÓN */}
+        {/* ENCABEZADO SUPERIOR IZQUIERDO (MENÚ + LOGO + NOMBRE) */}
         {/* ========================================== */}
 
-        <View style={styles.header}>
-          <View style={styles.filaLogoTitulo}>
+        <View
+          style={[
+            styles.header,
+            { borderBottomColor: theme.cardBorder },
+          ]}
+        >
+          <View style={styles.filaIzquierdaHeader}>
+            {/* Botón tipo hamburguesa (☰) como en la imagen */}
+            <Pressable
+              style={[
+                styles.botonMenu,
+                { backgroundColor: theme.sectionBg, borderColor: theme.cardBorder },
+              ]}
+              onPress={() => setMenuAbierto(!menuAbierto)}
+            >
+              <Ionicons name="menu" size={30} color={theme.text} />
+            </Pressable>
+
             <Image
               source={require('../assets/images/icon.png')}
               style={styles.logoHeader}
             />
+
             <Text style={[styles.titulo, { color: theme.text }]}>
               MobiAmigo
             </Text>
           </View>
         </View>
+
+        {/* ========================================== */}
+        {/* MENÚ DESPLEGABLE CON LA OPCIÓN DE "INFO" */}
+        {/* ========================================== */}
+
+        {menuAbierto && (
+          <View
+            style={[
+              styles.menuDesplegable,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.opcionMenu}
+              onPress={() => {
+                setMenuAbierto(false);
+                setModalInfoVisible(true);
+              }}
+            >
+              <Ionicons
+                name="information-circle"
+                size={26}
+                color={theme.btnApps}
+              />
+              <Text style={[styles.textoOpcionMenu, { color: theme.text }]}>
+                Info (Equipo de Trabajo)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* ========================================== */}
         {/* 1. ZONA DE NOTIFICACIONES MÁS CERCANAS */}
@@ -718,6 +773,118 @@ export default function App() {
           </Text>
         </Pressable>
       </View>
+
+      {/* ========================================== */}
+      {/* MODAL DE INFORMACIÓN DEL EQUIPO DE TRABAJO */}
+      {/* ========================================== */}
+
+      <Modal
+        visible={modalInfoVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalInfoVisible(false)}
+      >
+        <View style={styles.overlayModal}>
+          <View
+            style={[
+              styles.contenidoModalInfo,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              },
+            ]}
+          >
+            <View style={styles.cabeceraModalInfo}>
+              <Image
+                source={require('../assets/images/icon.png')}
+                style={styles.logoModalInfo}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.tituloModalInfo, { color: theme.text }]}>
+                  MobiAmigo
+                </Text>
+                <Text style={[styles.subtituloModalInfo, { color: theme.subtext }]}>
+                  Versión 1.0.0
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.cajaSeccionInfo,
+                { backgroundColor: theme.sectionBg, borderColor: theme.cardBorder },
+              ]}
+            >
+              <Text style={[styles.tituloBloqueInfo, { color: theme.text }]}>
+                👥 Equipo de Trabajo (MoviAmigo Team)
+              </Text>
+              <Text style={[styles.itemIntegrante, { color: theme.text }]}>
+                • Pablo Gajardo
+              </Text>
+              <Text style={[styles.itemIntegrante, { color: theme.text }]}>
+                • Martín Rivas
+              </Text>
+              <Text style={[styles.itemIntegrante, { color: theme.text }]}>
+                • Lucciano Parra
+              </Text>
+              <Text style={[styles.itemIntegrante, { color: theme.text }]}>
+                • Franco Constanzo
+              </Text>
+              <Text style={[styles.itemIntegrante, { color: theme.text }]}>
+                • Kevin Viveros
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.cajaSeccionInfo,
+                { backgroundColor: theme.sectionBg, borderColor: theme.cardBorder },
+              ]}
+            >
+              <Text style={[styles.tituloBloqueInfo, { color: theme.text }]}>
+                🤝 Equipo Externo
+              </Text>
+              <View style={styles.filaEquipoExterno}>
+                <Image
+                  source={require('../assets/images/SKA_Logo_D-1.png')}
+                  style={styles.logoEquipoExterno}
+                  resizeMode="contain"
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.nombreEquipoExterno, { color: theme.text }]}>
+                    Ska Matsuki
+                  </Text>
+                  <Text style={[styles.rolEquipoExterno, { color: theme.subtext }]}>
+                    Colaboración y Desarrollo Externo
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.cajaSeccionInfo,
+                { backgroundColor: theme.sectionBg, borderColor: theme.cardBorder },
+              ]}
+            >
+              <Text style={[styles.tituloBloqueInfo, { color: theme.text }]}>
+                🎓 Institución
+              </Text>
+              <Text style={[styles.textoInstitucion, { color: theme.subtext }]}>
+                Técnico Universitario en Informática{'\n'}
+                Universidad Técnica Federico Santa María (UTFSM)
+              </Text>
+            </View>
+
+            <Pressable
+              style={[styles.botonCerrarInfo, { backgroundColor: theme.btnApps }]}
+              onPress={() => setModalInfoVisible(false)}
+            >
+              <Text style={styles.textoBotonCerrarInfo}>Cerrar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -740,30 +907,65 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   // ==========================================
-  // ENCABEZADO
+  // ENCABEZADO SUPERIOR IZQUIERDO Y MENÚ
   // ==========================================
   header: {
     width: '100%',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filaLogoTitulo: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1.5,
+    marginBottom: 10,
+  },
+  filaIzquierdaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  botonMenu: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
   },
   logoHeader: {
-    width: 54,
-    height: 54,
-    borderRadius: 14,
-    marginRight: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    marginRight: 10,
   },
   titulo: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
+  },
+  menuDesplegable: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  opcionMenu: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+  },
+  textoOpcionMenu: {
+    fontSize: 19,
+    fontWeight: '700',
+    marginLeft: 10,
   },
   // ==========================================
   // TÍTULOS DE SECCIÓN
@@ -944,5 +1146,94 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     marginTop: 5,
+  },
+  // ==========================================
+  // MODAL DE INFORMACIÓN DEL EQUIPO
+  // ==========================================
+  overlayModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  contenidoModalInfo: {
+    width: '100%',
+    borderRadius: 22,
+    borderWidth: 1.5,
+    padding: 22,
+    elevation: 8,
+  },
+  cabeceraModalInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  logoModalInfo: {
+    width: 58,
+    height: 58,
+    borderRadius: 14,
+    marginRight: 14,
+  },
+  tituloModalInfo: {
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  subtituloModalInfo: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  cajaSeccionInfo: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 14,
+    marginBottom: 14,
+  },
+  tituloBloqueInfo: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  itemIntegrante: {
+    fontSize: 17,
+    fontWeight: '600',
+    marginVertical: 2,
+  },
+  filaEquipoExterno: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  logoEquipoExterno: {
+    width: 58,
+    height: 58,
+    marginRight: 14,
+  },
+  nombreEquipoExterno: {
+    fontSize: 19,
+    fontWeight: '800',
+  },
+  rolEquipoExterno: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  textoInstitucion: {
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 22,
+  },
+  botonCerrarInfo: {
+    marginTop: 4,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textoBotonCerrarInfo: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: '800',
   },
 });
