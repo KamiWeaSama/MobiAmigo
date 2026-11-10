@@ -55,6 +55,48 @@ const MESES_CORTOS = [
   'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
 ];
 
+// ==========================================
+// PASOS DEL TUTORIAL DE BIENVENIDA Y USO
+// ==========================================
+
+const PASOS_TUTORIAL = [
+  {
+    titulo: '¡Bienvenido a MobiAmigo!',
+    descripcion:
+      'Esta aplicación fue creada para que uses tu teléfono de forma fácil, cómoda y con botones grandes.\n\nEn la barra de abajo siempre tendrás los 4 botones principales.',
+    icono: 'heart-circle' as const,
+    color: '#1D4ED8',
+  },
+  {
+    titulo: '1. Añadir Apps (Botón Azul)',
+    descripcion:
+      'Toca el botón azul "Añadir Apps" en la barra inferior para elegir tus aplicaciones favoritas (como WhatsApp, Cámara o Banco) y abrirlas con un solo toque.',
+    icono: 'apps' as const,
+    color: '#1D4ED8',
+  },
+  {
+    titulo: '2. Recordatorios (Botón Naranja)',
+    descripcion:
+      'Toca el botón naranja "Recordatorio" para escribir avisos rápidos, como tomar tus medicamentos. Aparecerán arriba del todo en tu pantalla.',
+    icono: 'notifications' as const,
+    color: '#D97706',
+  },
+  {
+    titulo: '3. Contactos (Botón Verde)',
+    descripcion:
+      'Toca el botón verde "Contactos" para guardar a tus familiares o amigos. Luego solo toca su tarjeta en el inicio para llamarlos de inmediato.',
+    icono: 'call' as const,
+    color: '#15803D',
+  },
+  {
+    titulo: '4. Calendario (Botón Morado)',
+    descripcion:
+      'Toca el botón morado "Calendario" para anotar tus controles médicos o reuniones con fecha y hora. ¡Los más cercanos también te avisarán en el inicio!',
+    icono: 'calendar' as const,
+    color: '#6D28D9',
+  },
+];
+
 export default function App() {
   const router = useRouter();
   const scheme = useColorScheme();
@@ -95,9 +137,11 @@ export default function App() {
   const [listaContactos, setListaContactos] =
     useState<ContactInfo[]>([]);
 
-  // Estado para el menú desplegable (☰) y el modal de "Info"
+  // Estado para el menú sobrepuesto (☰), el modal de "Info" y el Tutorial
   const [menuAbierto, setMenuAbierto] = useState<boolean>(false);
   const [modalInfoVisible, setModalInfoVisible] = useState<boolean>(false);
+  const [tutorialVisible, setTutorialVisible] = useState<boolean>(false);
+  const [pasoTutorial, setPasoTutorial] = useState<number>(0);
 
   // ==========================================
   // CARGAR DATOS GUARDADOS
@@ -251,6 +295,22 @@ export default function App() {
       };
 
       // ==========================================
+      // COMPROBAR SI ES LA PRIMERA VEZ QUE INGRESA
+      // ==========================================
+
+      const comprobarTutorialPrimeraVez = async () => {
+        try {
+          const yaVisto = await AsyncStorage.getItem('@tutorial_visto');
+          if (yaVisto === null) {
+            setPasoTutorial(0);
+            setTutorialVisible(true);
+          }
+        } catch (error) {
+          console.log("Error al comprobar tutorial:", error);
+        }
+      };
+
+      // ==========================================
       // EJECUTAR CARGA DE DATOS
       // ==========================================
 
@@ -258,8 +318,22 @@ export default function App() {
       cargarRecordatoriosDeMemoria();
       cargarEventosDeMemoria();
       cargarAppsDeMemoria();
+      comprobarTutorialPrimeraVez();
     }, [])
   );
+
+  // ==========================================
+  // FINALIZAR O SALTAR EL TUTORIAL
+  // ==========================================
+
+  const cerrarTutorial = async () => {
+    try {
+      setTutorialVisible(false);
+      await AsyncStorage.setItem('@tutorial_visto', 'true');
+    } catch (error) {
+      console.log("Error al guardar estado del tutorial:", error);
+    }
+  };
 
   // ==========================================
   // ELIMINAR RECORDATORIO
@@ -433,13 +507,13 @@ export default function App() {
           ]}
         >
           <View style={styles.filaIzquierdaHeader}>
-            {/* Botón tipo hamburguesa (☰) como en la imagen */}
+            {/* Botón tipo hamburguesa (☰) como en Facebook */}
             <Pressable
               style={[
                 styles.botonMenu,
                 { backgroundColor: theme.sectionBg, borderColor: theme.cardBorder },
               ]}
-              onPress={() => setMenuAbierto(!menuAbierto)}
+              onPress={() => setMenuAbierto(true)}
             >
               <Ionicons name="menu" size={30} color={theme.text} />
             </Pressable>
@@ -454,39 +528,6 @@ export default function App() {
             </Text>
           </View>
         </View>
-
-        {/* ========================================== */}
-        {/* MENÚ DESPLEGABLE CON LA OPCIÓN DE "INFO" */}
-        {/* ========================================== */}
-
-        {menuAbierto && (
-          <View
-            style={[
-              styles.menuDesplegable,
-              {
-                backgroundColor: theme.card,
-                borderColor: theme.cardBorder,
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.opcionMenu}
-              onPress={() => {
-                setMenuAbierto(false);
-                setModalInfoVisible(true);
-              }}
-            >
-              <Ionicons
-                name="information-circle"
-                size={26}
-                color={theme.btnApps}
-              />
-              <Text style={[styles.textoOpcionMenu, { color: theme.text }]}>
-                Info (Equipo de Trabajo)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {/* ========================================== */}
         {/* 1. ZONA DE NOTIFICACIONES MÁS CERCANAS */}
@@ -768,6 +809,255 @@ export default function App() {
       </View>
 
       {/* ========================================== */}
+      {/* MENÚ SOBREPUESTO (ESTILO FACEBOOK) */}
+      {/* ========================================== */}
+
+      <Modal
+        visible={menuAbierto}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuAbierto(false)}
+      >
+        <Pressable
+          style={styles.overlayMenuSobrepuesto}
+          onPress={() => setMenuAbierto(false)}
+        >
+          <Pressable
+            style={[
+              styles.panelMenuSobrepuesto,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Cabecera del menú sobrepuesto */}
+            <View
+              style={[
+                styles.cabeceraMenuSobrepuesto,
+                { borderBottomColor: theme.cardBorder },
+              ]}
+            >
+              <Image
+                source={require('../assets/images/icon.png')}
+                style={styles.logoMenuSobrepuesto}
+              />
+              <Text style={[styles.tituloMenuSobrepuesto, { color: theme.text }]}>
+                Menú MobiAmigo
+              </Text>
+              <TouchableOpacity
+                onPress={() => setMenuAbierto(false)}
+                style={styles.botonCerrarMenu}
+              >
+                <Ionicons name="close" size={28} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Opción 1: Ver Tutorial de Uso */}
+            <TouchableOpacity
+              style={[
+                styles.tarjetaOpcionMenu,
+                {
+                  backgroundColor: theme.sectionBg,
+                  borderColor: theme.cardBorder,
+                },
+              ]}
+              onPress={() => {
+                setMenuAbierto(false);
+                setPasoTutorial(0);
+                setTutorialVisible(true);
+              }}
+            >
+              <View
+                style={[
+                  styles.iconoCirculoMenu,
+                  { backgroundColor: theme.btnRecordatorio },
+                ]}
+              >
+                <Ionicons name="school" size={26} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.textoOpcionMenu, { color: theme.text }]}>
+                  Ver Tutorial de Uso
+                </Text>
+                <Text style={[styles.subtextoOpcionMenu, { color: theme.subtext }]}>
+                  Aprende paso a paso cómo usar la app
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={22} color={theme.subtext} />
+            </TouchableOpacity>
+
+            {/* Opción 2: Info (Equipo de Trabajo) */}
+            <TouchableOpacity
+              style={[
+                styles.tarjetaOpcionMenu,
+                {
+                  backgroundColor: theme.sectionBg,
+                  borderColor: theme.cardBorder,
+                },
+              ]}
+              onPress={() => {
+                setMenuAbierto(false);
+                setModalInfoVisible(true);
+              }}
+            >
+              <View
+                style={[
+                  styles.iconoCirculoMenu,
+                  { backgroundColor: theme.btnApps },
+                ]}
+              >
+                <Ionicons name="information-circle" size={28} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.textoOpcionMenu, { color: theme.text }]}>
+                  Info (Equipo de Trabajo)
+                </Text>
+                <Text style={[styles.subtextoOpcionMenu, { color: theme.subtext }]}>
+                  Integrantes, equipo externo e institución
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={22} color={theme.subtext} />
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ========================================== */}
+      {/* MODAL DEL TUTORIAL DE PRIMERA VEZ (5 PASOS) */}
+      {/* ========================================== */}
+
+      <Modal
+        visible={tutorialVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cerrarTutorial}
+      >
+        <View style={styles.overlayModal}>
+          <View
+            style={[
+              styles.contenidoModalInfo,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.cardBorder,
+              },
+            ]}
+          >
+            {/* Indicador de paso y botón Saltar */}
+            <View style={styles.filaSuperiorTutorial}>
+              <Text style={[styles.indicadorPasoTexto, { color: theme.subtext }]}>
+                Paso {pasoTutorial + 1} de {PASOS_TUTORIAL.length}
+              </Text>
+              <TouchableOpacity onPress={cerrarTutorial}>
+                <Text style={[styles.textoSaltarTutorial, { color: theme.danger }]}>
+                  Saltar ✕
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Ícono o Logo del paso actual */}
+            <View style={styles.contenedorIconoTutorial}>
+              {pasoTutorial === 0 ? (
+                <Image
+                  source={require('../assets/images/icon.png')}
+                  style={styles.logoGrandeTutorial}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.circuloIconoTutorial,
+                    { backgroundColor: PASOS_TUTORIAL[pasoTutorial].color },
+                  ]}
+                >
+                  <Ionicons
+                    name={PASOS_TUTORIAL[pasoTutorial].icono}
+                    size={58}
+                    color="#FFFFFF"
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Título y explicación del paso */}
+            <Text style={[styles.tituloPasoTutorial, { color: theme.text }]}>
+              {PASOS_TUTORIAL[pasoTutorial].titulo}
+            </Text>
+
+            <Text style={[styles.descripcionPasoTutorial, { color: theme.text }]}>
+              {PASOS_TUTORIAL[pasoTutorial].descripcion}
+            </Text>
+
+            {/* Puntos indicadores de progreso */}
+            <View style={styles.filaPuntosTutorial}>
+              {PASOS_TUTORIAL.map((_, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.puntoTutorial,
+                    {
+                      backgroundColor:
+                        idx === pasoTutorial
+                          ? PASOS_TUTORIAL[pasoTutorial].color
+                          : theme.cardBorder,
+                      width: idx === pasoTutorial ? 26 : 10,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+
+            {/* Botones Anterior / Siguiente / ¡Comenzar! */}
+            <View style={styles.filaBotonesTutorial}>
+              {pasoTutorial > 0 && (
+                <Pressable
+                  style={[
+                    styles.botonTutorialSecundario,
+                    {
+                      backgroundColor: theme.sectionBg,
+                      borderColor: theme.cardBorder,
+                    },
+                  ]}
+                  onPress={() => setPasoTutorial(pasoTutorial - 1)}
+                >
+                  <Text
+                    style={[
+                      styles.textoBotonTutorialSecundario,
+                      { color: theme.text },
+                    ]}
+                  >
+                    ← Anterior
+                  </Text>
+                </Pressable>
+              )}
+
+              <Pressable
+                style={[
+                  styles.botonTutorialPrincipal,
+                  {
+                    backgroundColor: PASOS_TUTORIAL[pasoTutorial].color,
+                  },
+                ]}
+                onPress={() => {
+                  if (pasoTutorial < PASOS_TUTORIAL.length - 1) {
+                    setPasoTutorial(pasoTutorial + 1);
+                  } else {
+                    cerrarTutorial();
+                  }
+                }}
+              >
+                <Text style={styles.textoBotonTutorialPrincipal}>
+                  {pasoTutorial < PASOS_TUTORIAL.length - 1
+                    ? 'Siguiente →'
+                    : '¡Comenzar a usar!'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================== */}
       {/* MODAL DE INFORMACIÓN DEL EQUIPO DE TRABAJO */}
       {/* ========================================== */}
 
@@ -936,29 +1226,163 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.4,
   },
-  menuDesplegable: {
-    marginHorizontal: 16,
-    marginBottom: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+  // ==========================================
+  // MENÚ SOBREPUESTO (ESTILO FACEBOOK)
+  // ==========================================
+  overlayMenuSobrepuesto: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    paddingTop: 58,
+    paddingHorizontal: 14,
   },
-  opcionMenu: {
+  panelMenuSobrepuesto: {
+    width: '92%',
+    maxWidth: 360,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 16,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  cabeceraMenuSobrepuesto: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingBottom: 12,
+    marginBottom: 12,
+    borderBottomWidth: 1.5,
+  },
+  logoMenuSobrepuesto: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  tituloMenuSobrepuesto: {
+    flex: 1,
+    fontSize: 21,
+    fontWeight: '800',
+  },
+  botonCerrarMenu: {
+    padding: 4,
+  },
+  tarjetaOpcionMenu: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    marginBottom: 10,
+  },
+  iconoCirculoMenu: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   textoOpcionMenu: {
-    fontSize: 19,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  subtextoOpcionMenu: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  // ==========================================
+  // ESTILOS DEL TUTORIAL DE PRIMERA VEZ
+  // ==========================================
+  filaSuperiorTutorial: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  indicadorPasoTexto: {
+    fontSize: 16,
     fontWeight: '700',
-    marginLeft: 10,
+  },
+  textoSaltarTutorial: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  contenedorIconoTutorial: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 14,
+  },
+  logoGrandeTutorial: {
+    width: 110,
+    height: 110,
+    borderRadius: 26,
+  },
+  circuloIconoTutorial: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+  },
+  tituloPasoTutorial: {
+    fontSize: 25,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  descripcionPasoTutorial: {
+    fontSize: 19,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 27,
+    marginBottom: 18,
+  },
+  filaPuntosTutorial: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 8,
+  },
+  puntoTutorial: {
+    height: 10,
+    borderRadius: 5,
+  },
+  filaBotonesTutorial: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  botonTutorialSecundario: {
+    flex: 1,
+    paddingVertical: 15,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textoBotonTutorialSecundario: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  botonTutorialPrincipal: {
+    flex: 1.4,
+    paddingVertical: 15,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+  },
+  textoBotonTutorialPrincipal: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: '800',
   },
   // ==========================================
   // TÍTULOS DE SECCIÓN
