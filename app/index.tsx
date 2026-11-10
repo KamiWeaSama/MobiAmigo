@@ -592,99 +592,6 @@ export default function App() {
             </View>
           </View>
         )}
-<<<<<<< HEAD
-
-        {/* ========================================== */}
-        {/* BOTONES INFERIORES (FILA 1) */}
-        {/* ========================================== */}
-
-        <View style={styles.contenedorBotones}>
-
-          {/* ========================================== */}
-          {/* BOTÓN AÑADIR APPS */}
-          {/* ========================================== */}
-
-          <Pressable
-            style={[styles.boton, { backgroundColor: theme.btnApps }]}
-            onPress={gestionarAplicaciones}
-          >
-            <Ionicons
-              name="apps"
-              size={60}
-              color="#FFFFFF"
-            />
-            <Text style={styles.textoBoton}>
-              Añadir Apps
-            </Text>
-          </Pressable>
-
-          {/* ========================================== */}
-          {/* BOTÓN AÑADIR RECORDATORIO */}
-          {/* ========================================== */}
-
-          <Pressable
-            style={[styles.boton, { backgroundColor: theme.btnRecordatorio }]}
-            onPress={() =>
-              router.push(
-                "/agregarecordatorio"
-              )
-            }
-          >
-            <Ionicons
-              name="notifications"
-              size={60}
-              color="#FFFFFF"
-            />
-            <Text style={styles.textoBoton}>
-              Añadir Recordatorio
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* ========================================== */}
-        {/* BOTONES INFERIORES (FILA 2) */}
-        {/* ========================================== */}
-
-        <View style={styles.contenedorBotones}>
-
-          {/* ========================================== */}
-          {/* BOTÓN AGREGAR CONTACTOS */}
-          {/* ========================================== */}
-
-          <Pressable
-            style={[styles.boton, { backgroundColor: theme.btnContactos }]}
-            onPress={gestionarContactos}
-          >
-            <Ionicons
-              name="call"
-              size={60}
-              color="#FFFFFF"
-            />
-            <Text style={styles.textoBoton}>
-              Agregar Contactos
-            </Text>
-          </Pressable>
-
-          {/* ========================================== */}
-          {/* BOTÓN CALENDARIO */}
-          {/* ========================================== */}
-
-          <Pressable 
-            style={[styles.boton, { backgroundColor: theme.btnCalendario }]} 
-            onPress={() => router.push('/calendario')}
-          >
-            <Ionicons
-              name="calendar"
-              size={60}
-              color="#FFFFFF"
-            />
-            <Text style={styles.textoBoton}>
-              Calendario
-            </Text>
-          </Pressable>
-        </View>
-=======
->>>>>>> 8693be7e30b39d398d30c2c99d3772bc8fd276d9
       </ScrollView>
 
       {/* ========================================== */}
@@ -742,7 +649,7 @@ export default function App() {
 
         <Pressable
           style={[styles.botonBarra, { backgroundColor: theme.btnContactos }]}
-          onPress={getContacts}
+          onPress={gestionarContactos}
         >
           <Ionicons
             name="call"
