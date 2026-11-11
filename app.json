@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "MobiAmigo",
@@ -22,7 +23,7 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.QUERY_ALL_PACKAGES",
-        "android.permission.CALL_PHONE"
+        "android.permission.QUERY_ALL_PACKAGES"
       ],
       "package": "com.anonymous.MobiAmigo"
     },

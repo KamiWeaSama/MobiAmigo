@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
+import { crearRecordatorio } from '../services/recordatoriosService';
 import {
   Alert,
   Pressable,
@@ -46,53 +47,78 @@ export default function agregarecordatorio() {
   const [alturaInput, setAlturaInput] = useState(110);
 
   // ==========================================
-  // GUARDAR RECORDATORIO EN MEMORIA LOCAL
+  // GUARDAR RECORDATORIO LOCALMENTE Y EN FIRESTORE
   // ==========================================
+  // Primero se guarda en Firestore para asociarlo a la
+  // cuenta que inició sesión. Después se actualiza la
+  // copia local que utiliza la aplicación.
 
   const guardarRecordatorioLocal = async () => {
     if (texto.trim() === '') {
-      Alert.alert("Error", "Por favor, escribe un recordatorio.");
+      Alert.alert('Error', 'Por favor, escribe un recordatorio.');
       return;
     }
 
     try {
+      // Guardar el recordatorio en Firestore.
+      await crearRecordatorio(texto.trim());
+
+      // Recuperar los recordatorios guardados localmente.
       const datosExistentes = await AsyncStorage.getItem('@mis_recordatorios');
       let listaActual: string[] = [];
-      
+
       if (datosExistentes !== null) {
         listaActual = JSON.parse(datosExistentes);
       }
 
+      // Agregar el nuevo recordatorio al comienzo de la lista.
       const nuevaLista = [texto.trim(), ...listaActual];
-      await AsyncStorage.setItem('@mis_recordatorios', JSON.stringify(nuevaLista));
 
-      setTexto(''); 
+      await AsyncStorage.setItem(
+        '@mis_recordatorios',
+        JSON.stringify(nuevaLista)
+      );
+
+      setTexto('');
       setAlturaInput(110);
-      Alert.alert("¡Listo!", "Recordatorio creado correctamente.", [
-        { text: "Aceptar", onPress: () => router.replace('/') }
-      ]);
+
+      Alert.alert(
+        '¡Listo!',
+        'Recordatorio creado y sincronizado correctamente.',
+        [
+          {
+            text: 'Aceptar',
+            onPress: () => router.replace('/')
+          }
+        ]
+      );
 
     } catch (error) {
-      console.log("Error al guardar desde el formulario:", error);
+      console.log('Error al guardar el recordatorio:', error);
+
+      Alert.alert(
+        'Error',
+        'No se pudo guardar el recordatorio en tu cuenta. Comprueba tu conexión e inténtalo nuevamente.'
+      );
     }
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
-      
+
       {/* ========================================== */}
       {/* BARRA SUPERIOR Y BOTÓN PARA VOLVER */}
       {/* ========================================== */}
 
       <View style={styles.barraSuperior}>
-        <Pressable 
+        <Pressable
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
             } else {
-              router.replace('/'); 
+              router.replace('/');
             }
-          }} 
+          }}
           style={[
             styles.botonAtras,
             { backgroundColor: theme.backBg, borderColor: theme.backBorder }
@@ -135,10 +161,10 @@ export default function agregarecordatorio() {
             },
           ]}
           placeholder="Ej: Tomar mi pastilla a las 8 de la mañana..."
-          placeholderTextColor={theme.subtext} 
+          placeholderTextColor={theme.subtext}
           value={texto}
-          onChangeText={(val) => setTexto(val)} 
-          
+          onChangeText={(val) => setTexto(val)}
+
           // CONFIGURACIÓN PARA EL SALTO DE LÍNEA
           multiline={true}
           blurOnSubmit={false}
@@ -172,6 +198,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+
+  // ==========================================
+  // BARRA SUPERIOR Y BOTÓN ATRÁS
+  // ==========================================
+
   barraSuperior: {
     width: '100%',
     paddingHorizontal: 16,
@@ -179,6 +210,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   botonAtras: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -187,41 +219,60 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
   },
+
   textoBotonAtras: {
     fontSize: 20,
     fontWeight: '700',
     marginLeft: 8,
   },
+
+  // ==========================================
+  // ENCABEZADO
+  // ==========================================
+
   header: {
     width: '100%',
     paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  text: { 
+
+  text: {
     fontSize: 32,
     fontWeight: '800',
     textAlign: 'center',
   },
+
+  // ==========================================
+  // CONTENIDO DEL FORMULARIO
+  // ==========================================
+
   contenido: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 12,
   },
+
   etiquetaCampo: {
     fontSize: 22,
     fontWeight: '700',
     marginBottom: 12,
   },
+
   input: {
     paddingHorizontal: 20,
     paddingVertical: 18,
-    borderRadius: 18,           
+    borderRadius: 18,
     fontSize: 22,
     borderWidth: 2,
-    marginBottom: 28,           
+    marginBottom: 28,
     width: '100%',
   },
+
+  // ==========================================
+  // BOTÓN CREAR RECORDATORIO
+  // ==========================================
+
   botonEnviar: {
     flexDirection: 'row',
     paddingVertical: 20,
@@ -235,6 +286,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
+
   textoBotonEnviar: {
     color: '#ffffff',
     fontSize: 24,

@@ -1,6 +1,8 @@
+
 // ==========================================
 // SECCIÓN DE IMPORTS
 // ==========================================
+
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -17,6 +19,15 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { auth } from '../config/firebase';
+
+import {
+  obtenerAplicaciones,
+  eliminarAplicaciones,
+  migrarAplicacionesAntiguas,
+  AplicacionInfo
+} from '../services/aplicacionesService';
 
 // ==========================================
 // INFORMACIÓN DE LAS APLICACIONES
@@ -37,6 +48,7 @@ export default function EliminarAppsScreen(): React.JSX.Element {
   // ==========================================
   // PALETA DE COLORES (MODO CLARO / OSCURO AUTOMÁTICO)
   // ==========================================
+
   const theme = {
     bg: isDark ? '#0F172A' : '#FFFDF9',
     card: isDark ? '#1E293B' : '#FFFFFF',
@@ -54,16 +66,17 @@ export default function EliminarAppsScreen(): React.JSX.Element {
   // ==========================================
   // LISTA DE APLICACIONES GUARDADAS
   // ==========================================
-  // Aquí se almacenarán solamente las aplicaciones
-  // que actualmente están agregadas a MobiAmigo.
+  // Aquí se almacenarán todas las aplicaciones
+  // seleccionadas por el usuario en Firestore.
+  //
+  // No importa si están instaladas o no
+  // en el dispositivo actual.
 
   const [apps, setApps] = useState<AppInfo[]>([]);
 
   // ==========================================
   // APLICACIONES SELECCIONADAS PARA ELIMINAR
   // ==========================================
-  // Guardamos los packageName de las aplicaciones
-  // que el usuario ha seleccionado.
 
   const [selectedApps, setSelectedApps] =
     useState<Set<string>>(new Set());
@@ -75,47 +88,224 @@ export default function EliminarAppsScreen(): React.JSX.Element {
   const [loading, setLoading] = useState<boolean>(true);
 
   // ==========================================
+  // MENSAJE DE ERROR
+  // ==========================================
+
+  const [errorMsg, setErrorMsg] =
+    useState<string | null>(null);
+
+  // ==========================================
   // CARGAR APLICACIONES GUARDADAS
   // ==========================================
 
   useEffect(() => {
 
+    let isMounted = true;
+
     const cargarAppsGuardadas = async () => {
 
       try {
 
-        const datosGuardados =
-          await AsyncStorage.getItem('@mis_apps');
+        const usuario = auth.currentUser;
 
-        if (datosGuardados !== null) {
+        if (!usuario) {
+          throw new Error('No hay una sesión iniciada.');
+        }
 
-          const appsGuardadas: AppInfo[] =
-            JSON.parse(datosGuardados);
+        // ==========================================
+        // MIGRAR APLICACIONES ANTIGUAS
+        // ==========================================
+        // Recuperamos las aplicaciones que estaban
+        // guardadas anteriormente en @mis_apps.
+        //
+        // El marcador evita repetir la migración
+        // o importar datos a otra cuenta del mismo
+        // dispositivo.
 
-          setApps(appsGuardadas);
+        const claveMigracion = '@apps_migracion_v1';
 
-        } else {
+        const migracionRealizada =
+          await AsyncStorage.getItem(claveMigracion);
 
-          setApps([]);
+        if (migracionRealizada !== 'true') {
+
+          const datosAntiguos =
+            await AsyncStorage.getItem('@mis_apps');
+
+          if (datosAntiguos !== null) {
+
+            const aplicacionesAntiguas: AppInfo[] =
+              JSON.parse(datosAntiguos);
+
+            if (Array.isArray(aplicacionesAntiguas)) {
+
+              const aplicacionesParaMigrar: AplicacionInfo[] =
+                aplicacionesAntiguas
+                  .filter((app) =>
+                    app &&
+                    typeof app.packageName === 'string'
+                  )
+                  .map((app) => ({
+                    label: app.label || 'Aplicación',
+                    packageName: app.packageName,
+                  }));
+
+              await migrarAplicacionesAntiguas(
+                aplicacionesParaMigrar
+              );
+
+            }
+
+          }
+
+          await AsyncStorage.setItem(
+            claveMigracion,
+            'true'
+          );
 
         }
 
-      } catch (error) {
+        // ==========================================
+        // OBTENER APLICACIONES DE FIRESTORE
+        // ==========================================
+        // Esta consulta obtiene todas las aplicaciones
+        // seleccionadas por el usuario.
+        //
+        // No se filtran por las aplicaciones instaladas.
+
+        const aplicacionesFirestore =
+          await obtenerAplicaciones();
+
+        // ==========================================
+        // OBTENER ICONOS DEL DISPOSITIVO ACTUAL
+        // ==========================================
+        // Los iconos no se guardan en Firestore.
+        // Cada dispositivo utiliza sus propios iconos.
+
+        let aplicacionesInstaladas: AppInfo[] = [];
+
+        try {
+
+          const LauncherKit =
+            require('react-native-launcher-kit');
+
+          const InstalledApps =
+            LauncherKit.InstalledApps ||
+            LauncherKit.default?.InstalledApps ||
+            LauncherKit;
+
+          let resultado: any = null;
+
+          if (
+            typeof InstalledApps.getApps === 'function'
+          ) {
+
+            resultado =
+              await InstalledApps.getApps();
+
+          } else if (
+            typeof InstalledApps.getSortedApps === 'function'
+          ) {
+
+            resultado =
+              await InstalledApps.getSortedApps();
+
+          }
+
+          if (Array.isArray(resultado)) {
+
+            aplicacionesInstaladas = resultado;
+
+          }
+
+        } catch (error) {
+
+          console.log(
+            'No se pudieron obtener los iconos locales:',
+            error
+          );
+
+        }
+
+        // ==========================================
+        // COMBINAR DATOS DE FIRESTORE E ICONOS LOCALES
+        // ==========================================
+        // Si la aplicación está instalada, utilizamos
+        // su icono local.
+        //
+        // Si no está instalada, conservamos la app
+        // y mostramos un icono genérico.
+
+        const aplicacionesCompletas: AppInfo[] =
+          aplicacionesFirestore.map((app) => {
+
+            const appInstalada =
+              aplicacionesInstaladas.find(
+                (instalada) =>
+                  instalada.packageName === app.packageName
+              );
+
+            return {
+              label: app.label || 'Aplicación',
+              packageName: app.packageName,
+              icon: appInstalada?.icon,
+            };
+
+          });
+
+        // ==========================================
+        // GUARDAR CACHÉ LOCAL POR USUARIO
+        // ==========================================
+
+        const claveAppsUsuario =
+          `@mis_apps_${usuario.uid}`;
+
+        await AsyncStorage.setItem(
+          claveAppsUsuario,
+          JSON.stringify(aplicacionesFirestore)
+        );
+
+        // ==========================================
+        // ACTUALIZAR LISTA DE LA PANTALLA
+        // ==========================================
+
+        if (isMounted) {
+
+          setApps(aplicacionesCompletas);
+
+        }
+
+      } catch (error: any) {
 
         console.log(
-          "Error al cargar aplicaciones:",
+          'Error al cargar aplicaciones:',
           error
         );
 
+        if (isMounted) {
+
+          setErrorMsg(
+            'No se pudieron cargar las aplicaciones: ' +
+            (error?.message || error)
+          );
+
+        }
+
       } finally {
 
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
 
       }
 
     };
 
     cargarAppsGuardadas();
+
+    return () => {
+      isMounted = false;
+    };
 
   }, []);
 
@@ -151,37 +341,88 @@ export default function EliminarAppsScreen(): React.JSX.Element {
   // ==========================================
   // ELIMINAR APLICACIONES SELECCIONADAS
   // ==========================================
-  // Crea una nueva lista dejando solamente las
-  // aplicaciones que NO fueron seleccionadas.
-  // Después guarda la nueva lista en AsyncStorage.
+  // Primero eliminamos los documentos de Firestore.
+  // Después actualizamos la caché local del usuario.
+  //
+  // La eliminación se realiza por packageName,
+  // independientemente de si la app está instalada.
+
   const eliminarAppsSeleccionadas = async () => {
 
     try {
 
-      // Dejamos solamente las aplicaciones
-      // que no fueron seleccionadas.
+      const usuario = auth.currentUser;
+
+      if (!usuario) {
+        throw new Error('No hay una sesión iniciada.');
+      }
+
+      // ==========================================
+      // COMPROBAR QUE EXISTAN APPS SELECCIONADAS
+      // ==========================================
+
+      if (selectedApps.size === 0) {
+        return;
+      }
+
+      // ==========================================
+      // OBTENER PACKAGE NAMES SELECCIONADOS
+      // ==========================================
+
+      const packageNames =
+        Array.from(selectedApps);
+
+      // ==========================================
+      // ELIMINAR DE FIRESTORE
+      // ==========================================
+
+      await eliminarAplicaciones(packageNames);
+
+      // ==========================================
+      // ACTUALIZAR LA LISTA DE LA PANTALLA
+      // ==========================================
+
       const nuevasApps = apps.filter(
         (app) =>
           !selectedApps.has(app.packageName)
       );
 
-      // Actualizamos la lista de la pantalla.
       setApps(nuevasApps);
 
-      // Guardamos la nueva lista.
+      // ==========================================
+      // ACTUALIZAR CACHÉ LOCAL POR USUARIO
+      // ==========================================
+
+      const claveAppsUsuario =
+        `@mis_apps_${usuario.uid}`;
+
+      const aplicacionesParaGuardar: AplicacionInfo[] =
+        nuevasApps.map((app) => ({
+          label: app.label,
+          packageName: app.packageName,
+        }));
+
       await AsyncStorage.setItem(
-        '@mis_apps',
-        JSON.stringify(nuevasApps)
+        claveAppsUsuario,
+        JSON.stringify(aplicacionesParaGuardar)
       );
 
-      // Volvemos a la pantalla principal.
+      // ==========================================
+      // VOLVER AL INDEX
+      // ==========================================
+
       router.replace('/');
 
-    } catch (error) {
+    } catch (error: any) {
 
       console.log(
-        "Error al eliminar aplicaciones:",
+        'Error al eliminar aplicaciones:',
         error
+      );
+
+      setErrorMsg(
+        'No se pudieron eliminar las aplicaciones: ' +
+        (error?.message || error)
       );
 
     }
@@ -201,6 +442,7 @@ export default function EliminarAppsScreen(): React.JSX.Element {
       return (
 
         <Pressable
+
           onPress={() =>
             seleccionarApp(item.packageName)
           }
@@ -208,12 +450,19 @@ export default function EliminarAppsScreen(): React.JSX.Element {
           style={[
             styles.appCard,
             {
-              backgroundColor: seleccionada ? theme.cardSelectedBg : theme.card,
-              borderColor: seleccionada ? theme.cardSelectedBorder : theme.cardBorder,
+              backgroundColor: seleccionada
+                ? theme.cardSelectedBg
+                : theme.card,
+
+              borderColor: seleccionada
+                ? theme.cardSelectedBorder
+                : theme.cardBorder,
             },
             seleccionada && styles.appCardSeleccionada
           ]}
+
         >
+
           {/* ========================================== */}
           {/* ICONO DE LA APLICACIÓN */}
           {/* ========================================== */}
@@ -254,7 +503,10 @@ export default function EliminarAppsScreen(): React.JSX.Element {
           <View style={styles.appInfo}>
 
             <Text
-              style={[styles.appName, { color: theme.text }]}
+              style={[
+                styles.appName,
+                { color: theme.text }
+              ]}
               numberOfLines={1}
             >
               {item.label || 'Aplicación'}
@@ -267,9 +519,17 @@ export default function EliminarAppsScreen(): React.JSX.Element {
           {/* ========================================== */}
 
           <Ionicons
-            name={seleccionada ? "checkmark-circle" : "ellipse-outline"}
+            name={
+              seleccionada
+                ? 'checkmark-circle'
+                : 'ellipse-outline'
+            }
             size={34}
-            color={seleccionada ? theme.btnDelete : theme.subtext}
+            color={
+              seleccionada
+                ? theme.btnDelete
+                : theme.subtext
+            }
           />
 
         </Pressable>
@@ -280,29 +540,47 @@ export default function EliminarAppsScreen(): React.JSX.Element {
 
   return (
 
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.bg }
+      ]}
+    >
 
       {/* ========================================== */}
       {/* BARRA SUPERIOR Y BOTÓN ATRÁS */}
       {/* ========================================== */}
 
       <View style={styles.barraSuperior}>
+
         <Pressable
           onPress={() => router.back()}
           style={[
             styles.botonAtras,
-            { backgroundColor: theme.backBg, borderColor: theme.backBorder }
+            {
+              backgroundColor: theme.backBg,
+              borderColor: theme.backBorder
+            }
           ]}
         >
+
           <Ionicons
             name="arrow-back"
             size={28}
             color={theme.text}
           />
-          <Text style={[styles.textoBotonAtras, { color: theme.text }]}>
+
+          <Text
+            style={[
+              styles.textoBotonAtras,
+              { color: theme.text }
+            ]}
+          >
             Volver
           </Text>
+
         </Pressable>
+
       </View>
 
       {/* ========================================== */}
@@ -310,9 +588,16 @@ export default function EliminarAppsScreen(): React.JSX.Element {
       {/* ========================================== */}
 
       <View style={styles.header}>
-        <Text style={[styles.titulo, { color: theme.text }]}>
+
+        <Text
+          style={[
+            styles.titulo,
+            { color: theme.text }
+          ]}
+        >
           Eliminar Apps
         </Text>
+
       </View>
 
       {/* ========================================== */}
@@ -328,8 +613,23 @@ export default function EliminarAppsScreen(): React.JSX.Element {
             color={theme.accent}
           />
 
-          <Text style={[styles.loadingText, { color: theme.text }]}>
+          <Text
+            style={[
+              styles.loadingText,
+              { color: theme.text }
+            ]}
+          >
             Cargando aplicaciones...
+          </Text>
+
+        </View>
+
+      ) : errorMsg ? (
+
+        <View style={styles.center}>
+
+          <Text style={styles.errorText}>
+            {errorMsg}
           </Text>
 
         </View>
@@ -344,7 +644,12 @@ export default function EliminarAppsScreen(): React.JSX.Element {
             color={theme.subtext}
           />
 
-          <Text style={[styles.sinAppsText, { color: theme.text }]}>
+          <Text
+            style={[
+              styles.sinAppsText,
+              { color: theme.text }
+            ]}
+          >
             No hay aplicaciones agregadas.
           </Text>
 
@@ -353,6 +658,7 @@ export default function EliminarAppsScreen(): React.JSX.Element {
       ) : (
 
         <>
+
           {/* ========================================== */}
           {/* LISTA DE APLICACIONES */}
           {/* ========================================== */}
@@ -367,14 +673,23 @@ export default function EliminarAppsScreen(): React.JSX.Element {
               styles.listContent
             }
           />
+
           {/* ========================================== */}
           {/* BOTÓN ELIMINAR */}
           {/* ========================================== */}
-          {/* El botón elimina solamente las apps que */}
-          {/* hayan sido seleccionadas previamente. */}
+          {/* El botón elimina solamente las apps que
+              hayan sido seleccionadas previamente. */}
+
           <Pressable
-            style={[styles.botonEliminar, { backgroundColor: theme.btnDelete }]}
+            style={[
+              styles.botonEliminar,
+              {
+                backgroundColor: theme.btnDelete,
+                opacity: selectedApps.size === 0 ? 0.5 : 1,
+              }
+            ]}
             onPress={eliminarAppsSeleccionadas}
+            disabled={selectedApps.size === 0}
           >
 
             <Ionicons
@@ -404,6 +719,7 @@ export default function EliminarAppsScreen(): React.JSX.Element {
 // ==========================================
 
 const styles = StyleSheet.create({
+
   // ==========================================
   // CONTENEDOR PRINCIPAL
   // ==========================================
@@ -423,6 +739,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   botonAtras: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -431,6 +748,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
   },
+
   textoBotonAtras: {
     fontSize: 20,
     fontWeight: '700',
@@ -467,6 +785,13 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 18,
+    fontWeight: '600',
+  },
+
+  errorText: {
+    fontSize: 18,
+    color: '#DC2626',
+    textAlign: 'center',
     fontWeight: '600',
   },
 

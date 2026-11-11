@@ -20,9 +20,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { auth } from '../config/firebase';
+
+import {
+  obtenerAplicaciones,
+  guardarAplicaciones,
+  migrarAplicacionesAntiguas,
+  AplicacionInfo
+} from '../services/aplicacionesService';
+
 // ==========================================
 // INFORMACIÓN DE LAS APLICACIONES
 // ==========================================
+
 interface AppInfo {
   label: string;
   packageName: string;
@@ -37,6 +47,7 @@ export default function AgregarAppsScreen(): React.JSX.Element {
   // ==========================================
   // PALETA DE COLORES (MODO CLARO / OSCURO AUTOMÁTICO)
   // ==========================================
+
   const theme = {
     bg: isDark ? '#0F172A' : '#FFFDF9',
     card: isDark ? '#1E293B' : '#FFFFFF',
@@ -54,21 +65,18 @@ export default function AgregarAppsScreen(): React.JSX.Element {
   // ==========================================
   // LISTA DE APLICACIONES INSTALADAS
   // ==========================================
-  // Aquí se guardan todas las aplicaciones
-  // instaladas en el teléfono.
 
   const [apps, setApps] = useState<AppInfo[]>([]);
 
   // ==========================================
   // BUSCADOR DE APLICACIONES
   // ==========================================
+
   const [busqueda, setBusqueda] = useState<string>('');
 
   // ==========================================
   // APLICACIONES SELECCIONADAS
   // ==========================================
-  // Aquí guardamos las aplicaciones nuevas
-  // que el usuario quiere agregar a MobiAmigo.
 
   const [selectedApps, setSelectedApps] =
     useState<Set<string>>(new Set());
@@ -76,10 +84,6 @@ export default function AgregarAppsScreen(): React.JSX.Element {
   // ==========================================
   // APLICACIONES QUE YA ESTÁN AGREGADAS
   // ==========================================
-  // Guardamos los packageName de las aplicaciones
-  // que ya aparecen en el index.
-  // Estas aplicaciones no se mostrarán nuevamente
-  // en la lista de "Añadir Apps".
 
   const [appsYaAgregadas, setAppsYaAgregadas] =
     useState<AppInfo[]>([]);
@@ -87,205 +91,177 @@ export default function AgregarAppsScreen(): React.JSX.Element {
   // ==========================================
   // ESTADO DE CARGA
   // ==========================================
+
   const [loading, setLoading] =
     useState<boolean>(true);
 
   // ==========================================
   // MENSAJE DE ERROR
   // ==========================================
+
   const [errorMsg, setErrorMsg] =
     useState<string | null>(null);
 
   // ==========================================
-  // CARGAR APLICACIONES INSTALADAS
+  // CARGAR APLICACIONES INSTALADAS Y DE FIRESTORE
   // ==========================================
 
   useEffect(() => {
-
     let isMounted = true;
-    const cargarApps = async () => {
 
+    const cargarInformacion = async () => {
       try {
+        const usuario = auth.currentUser;
+
+        if (!usuario) {
+          throw new Error('No hay una sesión iniciada.');
+        }
+
         // ==========================================
         // CONECTAR CON LA LIBRERÍA
         // ==========================================
 
-        const LauncherKit =
-          require('react-native-launcher-kit');
-
+        const LauncherKit = require('react-native-launcher-kit');
         const InstalledApps =
           LauncherKit.InstalledApps ||
           LauncherKit.default?.InstalledApps ||
           LauncherKit;
+
         let result: any = null;
+
         // ==========================================
-        // OBTENER APLICACIONES
+        // OBTENER APLICACIONES INSTALADAS
         // ==========================================
-        if (
-          typeof InstalledApps.getApps ===
-          'function'
-        ) {
 
-          result =
-            await InstalledApps.getApps();
-
-        } else if (
-          typeof InstalledApps.getSortedApps ===
-          'function'
-        ) {
-
-          result =
-            await InstalledApps.getSortedApps();
-
+        if (typeof InstalledApps.getApps === 'function') {
+          result = await InstalledApps.getApps();
+        } else if (typeof InstalledApps.getSortedApps === 'function') {
+          result = await InstalledApps.getSortedApps();
         }
+
+        console.log('==========================================');
+        console.log('TIPO DE RESULTADO RECIBIDO:', typeof result);
+        console.log(
+          'CANTIDAD DE APPS:',
+          Array.isArray(result) ? result.length : 'No es un arreglo'
+        );
+        console.log('==========================================');
+
         // ==========================================
-        // INFORMACIÓN PARA DEPURACIÓN
+        // GUARDAR APLICACIONES INSTALADAS EN PANTALLA
         // ==========================================
 
-        console.log(
-          "=========================================="
-        );
+        let aplicacionesInstaladas: AppInfo[] = [];
 
-        console.log(
-          "TIPO DE RESULTADO RECIBIDO:",
-          typeof result
-        );
+        if (Array.isArray(result) && result.length > 0) {
+          console.log('PRIMERA APP:', result[0]);
+          console.log('ICONO:', result[0].icon);
 
-        console.log(
-          "CANTIDAD DE APPS:",
-          Array.isArray(result)
-            ? result.length
-            : "No es un arreglo"
-        );
-
-        console.log(
-          "=========================================="
-        );
-
-
-        if (
-          Array.isArray(result) &&
-          result.length > 0
-        ) {
-
-          console.log(
-            "PRIMERA APP:",
-            result[0]
+          aplicacionesInstaladas = [...result].sort((a, b) =>
+            (a.label || '').localeCompare(b.label || '')
           );
 
-          console.log(
-            "ICONO:",
-            result[0].icon
-          );
-
-        }
-        // ==========================================
-        // GUARDAR LAS APLICACIONES EN LA PANTALLA
-        // ==========================================
-
-        if (isMounted) {
-
-          if (
-            Array.isArray(result) &&
-            result.length > 0
-          ) {
-
-            const sortedApps =
-              [...result].sort((a, b) =>
-                (a.label || '').localeCompare(
-                  b.label || ''
-                )
-              );
-
-            setApps(sortedApps);
-
-          } else {
-
+          if (isMounted) {
+            setApps(aplicacionesInstaladas);
+          }
+        } else {
+          if (isMounted) {
             setErrorMsg(
               'No se encontraron aplicaciones en el dispositivo.'
             );
+          }
+        }
 
+        // ==========================================
+        // MIGRAR APLICACIONES ANTIGUAS
+        // ==========================================
+        // Si todavía no se realizó la migración en
+        // este dispositivo, recuperamos las apps
+        // guardadas anteriormente en @mis_apps.
+        //
+        // El marcador evita importar las aplicaciones
+        // antiguas a otra cuenta en este mismo teléfono.
+
+        const claveMigracion = '@apps_migracion_v1';
+        const migracionRealizada =
+          await AsyncStorage.getItem(claveMigracion);
+
+        if (migracionRealizada !== 'true') {
+          const datosAntiguos =
+            await AsyncStorage.getItem('@mis_apps');
+
+          if (datosAntiguos !== null) {
+            const aplicacionesAntiguas: AppInfo[] =
+              JSON.parse(datosAntiguos);
+
+            if (Array.isArray(aplicacionesAntiguas)) {
+              const aplicacionesParaMigrar: AplicacionInfo[] =
+                aplicacionesAntiguas
+                  .filter((app) =>
+                    app && typeof app.packageName === 'string'
+                  )
+                  .map((app) => ({
+                    label: app.label || 'Aplicación',
+                    packageName: app.packageName,
+                  }));
+
+              await migrarAplicacionesAntiguas(
+                aplicacionesParaMigrar
+              );
+            }
           }
 
+          // Solo marcamos la migración como realizada
+          // después de completar correctamente el proceso.
+
+          await AsyncStorage.setItem(claveMigracion, 'true');
         }
 
-      } catch (error: any) {
+        // ==========================================
+        // OBTENER APLICACIONES DESDE FIRESTORE
+        // ==========================================
 
-        console.error(
-          'Error al obtener aplicaciones:',
-          error
+        const aplicacionesFirestore = await obtenerAplicaciones();
+
+        // ==========================================
+        // GUARDAR CACHÉ LOCAL POR USUARIO
+        // ==========================================
+
+        const claveAppsUsuario = `@mis_apps_${usuario.uid}`;
+
+        await AsyncStorage.setItem(
+          claveAppsUsuario,
+          JSON.stringify(aplicacionesFirestore)
         );
 
-        if (isMounted) {
+        // ==========================================
+        // ACTUALIZAR APLICACIONES YA AGREGADAS
+        // ==========================================
 
+        if (isMounted) {
+          setAppsYaAgregadas(aplicacionesFirestore);
+        }
+      } catch (error: any) {
+        console.error('Error al cargar aplicaciones:', error);
+
+        if (isMounted) {
           setErrorMsg(
-            'Error al leer aplicaciones: ' +
+            'No se pudieron cargar las aplicaciones: ' +
             (error?.message || error)
           );
-
         }
-
       } finally {
-
         if (isMounted) {
-
           setLoading(false);
-
         }
-
       }
-
     };
 
-    cargarApps();
+    cargarInformacion();
+
     return () => {
       isMounted = false;
     };
-  }, []);
-
-  // ==========================================
-  // CARGAR APLICACIONES YA AGREGADAS
-  // ==========================================
-  // Leemos @mis_apps para saber qué aplicaciones
-  // ya están actualmente en MobiAmigo.
-  // Estas aplicaciones serán ocultadas de la lista.
-  useEffect(() => {
-
-    const cargarAppsGuardadas = async () => {
-
-      try {
-
-        const datosGuardados =
-          await AsyncStorage.getItem(
-            '@mis_apps'
-          );
-
-        if (datosGuardados !== null) {
-
-          const appsGuardadas: AppInfo[] =
-            JSON.parse(datosGuardados);
-
-          setAppsYaAgregadas(
-            appsGuardadas
-          );
-
-        } else {
-
-          setAppsYaAgregadas([]);
-
-        }
-
-      } catch (error) {
-
-        console.log(
-          "Error al cargar apps guardadas:",
-          error
-        );
-
-      }
-
-    };
-    cargarAppsGuardadas();
   }, []);
 
   // ==========================================
@@ -295,217 +271,206 @@ export default function AgregarAppsScreen(): React.JSX.Element {
   // se deselecciona.
   // Si no estaba seleccionada:
   // se selecciona.
-  const seleccionarApp = (
-    packageName: string
-  ) => {
+
+  const seleccionarApp = (packageName: string) => {
     setSelectedApps((actuales) => {
+      const nuevas = new Set(actuales);
 
-      const nuevas =
-        new Set(actuales);
-
-      if (
-        nuevas.has(packageName)
-      ) {
-
+      if (nuevas.has(packageName)) {
         nuevas.delete(packageName);
-
       } else {
-
         nuevas.add(packageName);
-
       }
+
       return nuevas;
-
     });
-
   };
 
   // ==========================================
   // CONFIRMAR SELECCIÓN
   // ==========================================
-  // Primero conserva las aplicaciones que ya
-  // estaban agregadas.
-  // Después agrega las nuevas aplicaciones
-  // seleccionadas por el usuario.
-  // Finalmente guarda todo nuevamente en
-  // @mis_apps.
-  const confirmarSeleccion =
-    async () => {
-      try {
-        // ==========================================
-        // OBTENER LAS NUEVAS APLICACIONES
-        // ==========================================
-        // Buscamos solamente las aplicaciones que
-        // fueron seleccionadas en esta pantalla.
-        const nuevasApps =
-          apps.filter((app) =>
-            selectedApps.has(
-              app.packageName
-            )
-          );
-        // ==========================================
-        // COMBINAR APPS ANTIGUAS Y NUEVAS
-        // ==========================================
-        const todasLasApps = [
-          ...appsYaAgregadas,
-          ...nuevasApps
-        ];
-        // ==========================================
-        // GUARDAR EN MEMORIA
-        // ==========================================
-        await AsyncStorage.setItem(
-          '@mis_apps',
-          JSON.stringify(
-            todasLasApps
-          )
-        );
-        // ==========================================
-        // VOLVER AL INDEX
-        // ==========================================
+  // Guardamos las nuevas aplicaciones en Firestore.
+  // Después actualizamos la caché local del usuario.
 
-        router.replace('/');
-      } catch (error) {
+  const confirmarSeleccion = async () => {
+    try {
+      const usuario = auth.currentUser;
 
-        console.log(
-          "Error al guardar aplicaciones:",
-          error
-        );
-
-        setErrorMsg(
-          "No se pudieron guardar las aplicaciones."
-        );
-
+      if (!usuario) {
+        throw new Error('No hay una sesión iniciada.');
       }
 
-    };
+      // ==========================================
+      // OBTENER LAS NUEVAS APLICACIONES
+      // ==========================================
+
+      const nuevasApps = apps.filter((app) =>
+        selectedApps.has(app.packageName)
+      );
+
+      // ==========================================
+      // PREPARAR INFORMACIÓN PARA FIRESTORE
+      // ==========================================
+
+      const aplicacionesParaGuardar: AplicacionInfo[] =
+        nuevasApps.map((app) => ({
+          label: app.label || 'Aplicación',
+          packageName: app.packageName,
+        }));
+
+      // ==========================================
+      // GUARDAR EN FIRESTORE
+      // ==========================================
+
+      await guardarAplicaciones(aplicacionesParaGuardar);
+
+      // ==========================================
+      // OBTENER TODAS LAS APLICACIONES DESDE FIRESTORE
+      // ==========================================
+      // Recuperamos la lista actualizada para asegurarnos
+      // de que la caché local coincida con la información
+      // almacenada en la nube.
+
+      const todasLasApps = await obtenerAplicaciones();
+
+      // ==========================================
+      // GUARDAR CACHÉ LOCAL POR USUARIO
+      // ==========================================
+
+      const claveAppsUsuario = `@mis_apps_${usuario.uid}`;
+
+      await AsyncStorage.setItem(
+        claveAppsUsuario,
+        JSON.stringify(todasLasApps)
+      );
+
+      // ==========================================
+      // VOLVER AL INDEX
+      // ==========================================
+
+      router.replace('/');
+    } catch (error: any) {
+      console.log('Error al guardar aplicaciones:', error);
+
+      setErrorMsg(
+        'No se pudieron guardar las aplicaciones: ' +
+        (error?.message || error)
+      );
+    }
+  };
 
   // ==========================================
   // MOSTRAR CADA APLICACIÓN
   // ==========================================
 
-  const renderItem:
-    ListRenderItem<AppInfo> =
-    ({ item }) => {
+  const renderItem: ListRenderItem<AppInfo> = ({ item }) => {
+    const seleccionada = selectedApps.has(item.packageName);
 
-      const seleccionada =
-        selectedApps.has(
-          item.packageName
-        );
+    return (
+      <Pressable
+        onPress={() => seleccionarApp(item.packageName)}
+        style={[
+          styles.appCard,
+          {
+            backgroundColor: seleccionada
+              ? theme.cardSelectedBg
+              : theme.card,
+            borderColor: seleccionada
+              ? theme.cardSelectedBorder
+              : theme.cardBorder,
+          },
+          seleccionada && styles.appCardSeleccionada
+        ]}
+      >
+        {/* ========================================== */}
+        {/* ICONO DE LA APLICACIÓN */}
+        {/* ========================================== */}
 
-      return (
-
-        <Pressable
-
-          onPress={() =>
-            seleccionarApp(
-              item.packageName
-            )
-          }
-
-          style={[
-            styles.appCard,
-            {
-              backgroundColor: seleccionada ? theme.cardSelectedBg : theme.card,
-              borderColor: seleccionada ? theme.cardSelectedBorder : theme.cardBorder,
-            },
-            seleccionada && styles.appCardSeleccionada
-          ]}
-
-        >
-
-          {/* ========================================== */}
-          {/* ICONO DE LA APLICACIÓN */}
-          {/* ========================================== */}
-
-          {item.icon ? (
-
-            <Image
-
-              source={{
-                uri: item.icon
-              }}
-
-              style={styles.icon}
-
-            />
-
-          ) : (
-
-            <View
-              style={[
-                styles.icon,
-                styles.iconPlaceholder,
-                { backgroundColor: theme.accent }
-              ]}
-            >
-
-              <Ionicons
-                name="cube-outline"
-                size={28}
-                color="#FFFFFF"
-              />
-
-            </View>
-
-          )}
-          {/* ========================================== */}
-          {/* INFORMACIÓN DE LA APLICACIÓN */}
-          {/* ========================================== */}
-
-          <View style={styles.appInfo}>
-
-            <Text
-              style={[styles.appName, { color: theme.text }]}
-              numberOfLines={1}
-            >
-              {item.label || 'Aplicación'}
-            </Text>
-
-          </View>
-          {/* ========================================== */}
-          {/* MARCA DE SELECCIÓN */}
-          {/* ========================================== */}
-
-          <Ionicons
-            name={seleccionada ? "checkmark-circle" : "ellipse-outline"}
-            size={34}
-            color={seleccionada ? theme.btnConfirm : theme.subtext}
+        {item.icon ? (
+          <Image
+            source={{ uri: item.icon }}
+            style={styles.icon}
           />
+        ) : (
+          <View
+            style={[
+              styles.icon,
+              styles.iconPlaceholder,
+              { backgroundColor: theme.accent }
+            ]}
+          >
+            <Ionicons
+              name="cube-outline"
+              size={28}
+              color="#FFFFFF"
+            />
+          </View>
+        )}
 
-        </Pressable>
+        {/* ========================================== */}
+        {/* INFORMACIÓN DE LA APLICACIÓN */}
+        {/* ========================================== */}
 
-      );
+        <View style={styles.appInfo}>
+          <Text
+            style={[
+              styles.appName,
+              { color: theme.text }
+            ]}
+            numberOfLines={1}
+          >
+            {item.label || 'Aplicación'}
+          </Text>
+        </View>
 
-    };
+        {/* ========================================== */}
+        {/* MARCA DE SELECCIÓN */}
+        {/* ========================================== */}
+
+        <Ionicons
+          name={
+            seleccionada
+              ? 'checkmark-circle'
+              : 'ellipse-outline'
+          }
+          size={34}
+          color={
+            seleccionada
+              ? theme.btnConfirm
+              : theme.subtext
+          }
+        />
+      </Pressable>
+    );
+  };
 
   // ==========================================
   // FILTRAR APLICACIONES
   // ==========================================
   // Se crea una lista nueva que solamente contiene
   // las aplicaciones que todavía NO están agregadas
-  // en el index y que coinciden con el buscador.
-  const appsDisponibles =
-    apps.filter((app) => {
+  // en Firestore y que coinciden con el buscador.
 
-      const yaExiste =
-        appsYaAgregadas.some(
-          (appAgregada) =>
-            appAgregada.packageName ===
-            app.packageName
-        );
+  const appsDisponibles = apps.filter((app) => {
+    const yaExiste = appsYaAgregadas.some(
+      (appAgregada) =>
+        appAgregada.packageName === app.packageName
+    );
 
-      const coincideBusqueda =
-        (app.label || '')
-          .toLowerCase()
-          .includes(busqueda.trim().toLowerCase());
+    const coincideBusqueda = (app.label || '')
+      .toLowerCase()
+      .includes(busqueda.trim().toLowerCase());
 
-      return !yaExiste && coincideBusqueda;
-
-    });
+    return !yaExiste && coincideBusqueda;
+  });
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
-
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.bg }
+      ]}
+    >
       {/* ========================================== */}
       {/* BARRA SUPERIOR Y BOTÓN ATRÁS */}
       {/* ========================================== */}
@@ -521,7 +486,10 @@ export default function AgregarAppsScreen(): React.JSX.Element {
           }}
           style={[
             styles.botonAtras,
-            { backgroundColor: theme.backBg, borderColor: theme.backBorder }
+            {
+              backgroundColor: theme.backBg,
+              borderColor: theme.backBorder
+            }
           ]}
         >
           <Ionicons
@@ -529,7 +497,13 @@ export default function AgregarAppsScreen(): React.JSX.Element {
             size={28}
             color={theme.text}
           />
-          <Text style={[styles.textoBotonAtras, { color: theme.text }]}>
+
+          <Text
+            style={[
+              styles.textoBotonAtras,
+              { color: theme.text }
+            ]}
+          >
             Volver
           </Text>
         </Pressable>
@@ -540,7 +514,12 @@ export default function AgregarAppsScreen(): React.JSX.Element {
       {/* ========================================== */}
 
       <View style={styles.header}>
-        <Text style={[styles.titulo, { color: theme.text }]}>
+        <Text
+          style={[
+            styles.titulo,
+            { color: theme.text }
+          ]}
+        >
           Añadir Apps
         </Text>
       </View>
@@ -553,20 +532,36 @@ export default function AgregarAppsScreen(): React.JSX.Element {
         <View
           style={[
             styles.contenedorBuscador,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder }
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder
+            }
           ]}
         >
-          <Ionicons name="search" size={24} color={theme.subtext} />
+          <Ionicons
+            name="search"
+            size={24}
+            color={theme.subtext}
+          />
+
           <TextInput
-            style={[styles.inputBuscador, { color: theme.text }]}
+            style={[
+              styles.inputBuscador,
+              { color: theme.text }
+            ]}
             placeholder="Buscar aplicación por nombre..."
             placeholderTextColor={theme.subtext}
             value={busqueda}
             onChangeText={setBusqueda}
           />
+
           {busqueda.length > 0 && (
             <Pressable onPress={() => setBusqueda('')}>
-              <Ionicons name="close-circle" size={24} color={theme.subtext} />
+              <Ionicons
+                name="close-circle"
+                size={24}
+                color={theme.subtext}
+              />
             </Pressable>
           )}
         </View>
@@ -577,76 +572,68 @@ export default function AgregarAppsScreen(): React.JSX.Element {
       {/* ========================================== */}
 
       {loading ? (
-
         <View style={styles.center}>
-
           <ActivityIndicator
             size="large"
             color={theme.accent}
           />
 
-          <Text style={[styles.loadingText, { color: theme.text }]}>
+          <Text
+            style={[
+              styles.loadingText,
+              { color: theme.text }
+            ]}
+          >
             Cargando aplicaciones...
           </Text>
-
         </View>
-
       ) : errorMsg ? (
-
         <View style={styles.center}>
-
           <Text style={styles.errorText}>
             {errorMsg}
           </Text>
-
         </View>
-
       ) : appsDisponibles.length === 0 ? (
-        // ==========================================
-        // NO HAY APLICACIONES NUEVAS
-        // ==========================================
         <View style={styles.center}>
-
           <Ionicons
             name="checkmark-circle-outline"
             size={64}
             color={theme.btnConfirm}
           />
 
-          <Text style={[styles.sinAppsText, { color: theme.text }]}>
+          <Text
+            style={[
+              styles.sinAppsText,
+              { color: theme.text }
+            ]}
+          >
             {busqueda.trim().length > 0
               ? 'No se encontraron aplicaciones con ese nombre.'
               : 'No hay aplicaciones nuevas para agregar.'}
           </Text>
-
         </View>
-
       ) : (
-
         <>
           {/* ========================================== */}
           {/* LISTA DE APLICACIONES DISPONIBLES */}
           {/* ========================================== */}
+
           <FlatList
-
             data={appsDisponibles}
-
-            keyExtractor={(item) =>
-              item.packageName
-            }
-
+            keyExtractor={(item) => item.packageName}
             renderItem={renderItem}
-
-            contentContainerStyle={
-              styles.listContent
-            }
-
+            contentContainerStyle={styles.listContent}
           />
+
           {/* ========================================== */}
           {/* BOTÓN CONFIRMAR SELECCIÓN */}
           {/* ========================================== */}
+
           <Pressable
-            style={[styles.botonConfirmar, { backgroundColor: theme.btnConfirm }]}
+            style={[
+              styles.botonConfirmar,
+              { backgroundColor: theme.btnConfirm }
+            ]}
             onPress={confirmarSeleccion}
           >
             <Ionicons
@@ -654,20 +641,15 @@ export default function AgregarAppsScreen(): React.JSX.Element {
               size={30}
               color="#FFFFFF"
             />
+
             <Text style={styles.textoConfirmar}>
               Confirmar selección ({selectedApps.size})
             </Text>
-
           </Pressable>
-
         </>
-
       )}
-
     </SafeAreaView>
-
   );
-
 }
 
 // ==========================================
@@ -675,13 +657,14 @@ export default function AgregarAppsScreen(): React.JSX.Element {
 // ==========================================
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
   },
+
   // ==========================================
   // BARRA SUPERIOR Y BOTÓN ATRÁS
   // ==========================================
+
   barraSuperior: {
     width: '100%',
     paddingHorizontal: 16,
@@ -689,6 +672,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   botonAtras: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -697,11 +681,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
   },
+
   textoBotonAtras: {
     fontSize: 20,
     fontWeight: '700',
     marginLeft: 8,
   },
+
   // ==========================================
   // ENCABEZADO
   // ==========================================
@@ -717,9 +703,11 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '800',
   },
+
   // ==========================================
   // BUSCADOR
   // ==========================================
+
   contenedorBuscador: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -730,11 +718,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
   },
+
   inputBuscador: {
     flex: 1,
     fontSize: 18,
     marginLeft: 10,
   },
+
   // ==========================================
   // CONTENEDOR CENTRAL
   // ==========================================
@@ -765,6 +755,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+
   // ==========================================
   // LISTA
   // ==========================================
@@ -773,6 +764,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 20,
   },
+
   // ==========================================
   // TARJETA DE APLICACIÓN
   // ==========================================
@@ -785,6 +777,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1.5,
   },
+
   // ==========================================
   // TARJETA SELECCIONADA
   // ==========================================
@@ -792,6 +785,7 @@ const styles = StyleSheet.create({
   appCardSeleccionada: {
     borderWidth: 2.5,
   },
+
   // ==========================================
   // ICONO
   // ==========================================
@@ -842,5 +836,4 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontWeight: '800',
   },
-
 });

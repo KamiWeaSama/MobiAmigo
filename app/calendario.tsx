@@ -4,13 +4,24 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   Alert, FlatList, Modal, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, useColorScheme, View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { auth } from '../config/firebase';
+
+import {
+  eliminarEvento as eliminarEventoFirestore,
+  guardarEvento as guardarEventoFirestore,
+  migrarEventosAntiguos,
+  obtenerEventos,
+} from '../services/calendarioService';
+
+import type { EventoInfo } from '../services/calendarioService';
 
 // ==========================================
 // CONSTANTES DE FECHA Y HORA
@@ -18,7 +29,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-const ANIOS = Array.from({ length: 21 }, (_, i) => new Date().getFullYear() - 10 + i);
+
+const ANIOS = Array.from(
+  { length: 21 },
+  (_, i) => new Date().getFullYear() - 10 + i
+);
+
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTOS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
@@ -26,17 +42,7 @@ const MINUTOS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
 // ESTRUCTURA DE UN EVENTO DEL CALENDARIO
 // ==========================================
 
-interface Evento {
-  id: string;
-  nombre: string;
-  hora: string;
-  repiteSiempre: boolean;
-  repiteSemanal: boolean;
-  repiteMensual: boolean;
-  dia: number;
-  mes: number;
-  anio: number;
-}
+interface Evento extends EventoInfo {}
 
 export default function CalendarioScreen() {
   const router = useRouter();
@@ -89,42 +95,204 @@ export default function CalendarioScreen() {
   const [repMen, setRepMen] = useState(false);
 
   // ==========================================
-  // CARGAR EVENTOS GUARDADOS EN MEMORIA
+  // CARGAR EVENTOS DESDE FIREBASE
   // ==========================================
+  // Se utiliza useFocusEffect para volver a consultar
+  // Firestore cada vez que se abre esta pantalla.
+  // Esto permite recoger cambios realizados desde
+  // otro dispositivo cuando se vuelve al calendario.
 
-  useEffect(() => {
-    AsyncStorage.getItem('@eventos_calendario').then(d => d && setEventos(JSON.parse(d)));
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let activo = true;
+
+      const cargarEventos = async () => {
+        try {
+          const usuario = auth.currentUser;
+
+          if (!usuario) {
+            throw new Error('No hay una sesión iniciada.');
+          }
+
+          // ------------------------------------------
+          // MIGRAR EVENTOS ANTIGUOS DE ASYNCSTORAGE
+          // ------------------------------------------
+          // Los eventos antiguos estaban guardados en
+          // una clave general. Solo se intenta migrarlos
+          // una vez en este dispositivo.
+
+          const claveMigracion = '@eventos_calendario_migracion_v1';
+          const migracionRealizada = await AsyncStorage.getItem(claveMigracion);
+
+          if (migracionRealizada !== 'true') {
+            const eventosAntiguos = await AsyncStorage.getItem('@eventos_calendario');
+
+            if (eventosAntiguos) {
+              const eventosParseados: EventoInfo[] = JSON.parse(eventosAntiguos);
+              await migrarEventosAntiguos(eventosParseados);
+            }
+
+            await AsyncStorage.setItem(claveMigracion, 'true');
+          }
+
+          // ------------------------------------------
+          // OBTENER EVENTOS DESDE FIRESTORE
+          // ------------------------------------------
+
+          const eventosFirebase = await obtenerEventos();
+
+          if (!activo) return;
+
+          setEventos(eventosFirebase);
+
+          // ------------------------------------------
+          // ACTUALIZAR CACHÉ LOCAL DEL USUARIO
+          // ------------------------------------------
+
+          const claveEventosUsuario = `@eventos_calendario_${usuario.uid}`;
+
+          await AsyncStorage.setItem(
+            claveEventosUsuario,
+            JSON.stringify(eventosFirebase)
+          );
+
+        } catch (error) {
+          console.error('Error al cargar eventos desde Firebase:', error);
+
+          if (!activo) return;
+
+          // ------------------------------------------
+          // RECUPERAR CACHÉ LOCAL SI FIREBASE FALLA
+          // ------------------------------------------
+
+          try {
+            const usuario = auth.currentUser;
+
+            if (usuario) {
+              const claveEventosUsuario = `@eventos_calendario_${usuario.uid}`;
+              const eventosLocales = await AsyncStorage.getItem(claveEventosUsuario);
+
+              if (eventosLocales && activo) {
+                setEventos(JSON.parse(eventosLocales));
+              } else if (activo) {
+                setEventos([]);
+              }
+            }
+
+            if (activo) {
+              Alert.alert(
+                'Aviso',
+                'No se pudieron cargar los eventos desde la nube. Se intentará utilizar la información guardada en este dispositivo.'
+              );
+            }
+          } catch (errorLocal) {
+            console.error('Error al recuperar eventos locales:', errorLocal);
+          }
+        }
+      };
+
+      cargarEventos();
+
+      return () => {
+        activo = false;
+      };
+    }, [])
+  );
 
   // ==========================================
-  // GUARDAR EVENTOS EN ASYNCSTORAGE
+  // GUARDAR EVENTOS EN LA CACHÉ LOCAL
   // ==========================================
+  // Firestore es la fuente principal de información.
+  // AsyncStorage se utiliza como respaldo local.
 
-  const guardarEventos = async (nuevos: Evento[]) => {
+  const guardarEventosLocal = async (nuevos: Evento[]) => {
+    const usuario = auth.currentUser;
+
+    if (!usuario) {
+      throw new Error('No hay una sesión iniciada.');
+    }
+
     setEventos(nuevos);
-    await AsyncStorage.setItem('@eventos_calendario', JSON.stringify(nuevos));
+
+    const claveEventosUsuario = `@eventos_calendario_${usuario.uid}`;
+
+    try {
+      await AsyncStorage.setItem(
+        claveEventosUsuario,
+        JSON.stringify(nuevos)
+      );
+    } catch (error) {
+      console.error('Error al guardar la caché local:', error);
+    }
   };
 
   // ==========================================
   // CREAR UN NUEVO EVENTO
   // ==========================================
 
-  const agregarEvento = () => {
-    if (!nombre.trim()) return Alert.alert('Error', 'Ingresa el nombre del evento.');
+  const agregarEvento = async () => {
+    if (!nombre.trim()) {
+      return Alert.alert('Error', 'Ingresa el nombre del evento.');
+    }
+
     const nuevo: Evento = {
-      id: Date.now().toString(), nombre: nombre.trim(), hora: `${hora}:${minuto}`,
-      repiteSiempre: repSiemp, repiteSemanal: repSem, repiteMensual: repMen,
-      dia: diaSel, mes, anio
+      id: Date.now().toString(),
+      nombre: nombre.trim(),
+      hora: `${hora}:${minuto}`,
+      repiteSiempre: repSiemp,
+      repiteSemanal: repSem,
+      repiteMensual: repMen,
+      dia: diaSel,
+      mes,
+      anio,
     };
-    guardarEventos([...eventos, nuevo]);
-    setNombre(''); setRepSiemp(false); setRepSem(false); setRepMen(false); setModal(null);
+
+    try {
+      // Primero se guarda el evento en Firestore.
+      await guardarEventoFirestore(nuevo);
+
+      // Después se actualiza la caché local.
+      await guardarEventosLocal([...eventos, nuevo]);
+
+      // Limpiar el formulario.
+      setNombre('');
+      setRepSiemp(false);
+      setRepSem(false);
+      setRepMen(false);
+      setModal(null);
+
+    } catch (error) {
+      console.error('Error al guardar evento:', error);
+
+      Alert.alert(
+        'Error',
+        'No se pudo guardar el evento. Comprueba tu conexión e inténtalo nuevamente.'
+      );
+    }
   };
 
   // ==========================================
   // ELIMINAR UN EVENTO POR ID
   // ==========================================
 
-  const eliminarEvento = (id: string) => guardarEventos(eventos.filter(e => e.id !== id));
+  const eliminarEvento = async (id: string) => {
+    try {
+      // Eliminar el evento de Firestore.
+      await eliminarEventoFirestore(id);
+
+      // Actualizar la lista local.
+      const nuevosEventos = eventos.filter(e => e.id !== id);
+      await guardarEventosLocal(nuevosEventos);
+
+    } catch (error) {
+      console.error('Error al eliminar evento:', error);
+
+      Alert.alert(
+        'Error',
+        'No se pudo eliminar el evento. Comprueba tu conexión e inténtalo nuevamente.'
+      );
+    }
+  };
 
   // ==========================================
   // COMPROBAR SI UN EVENTO APLICA EN UNA FECHA
@@ -135,17 +303,25 @@ export default function CalendarioScreen() {
   const aplicaFecha = (e: Evento, d: number, m: number, a: number) => {
     const fCreada = new Date(e.anio, e.mes, e.dia);
     const fEval = new Date(a, m, d);
+
     if (fEval < fCreada) return false;
     if (e.repiteSiempre) return true;
-    if (e.dia === d && e.mes === m && e.anio === a) return true;
+
+    if (e.dia === d && e.mes === m && e.anio === a) {
+      return true;
+    }
+
     if (e.repiteSemanal && fEval.getDay() === fCreada.getDay()) {
       return e.repiteMensual || (m === e.mes && a === e.anio);
     }
+
     return e.repiteMensual && !e.repiteSemanal && e.dia === d;
   };
 
-  // Eventos que corresponden al día seleccionado
-  const eventosDelDia = eventos.filter(e => aplicaFecha(e, diaSel, mes, anio));
+  // Eventos que corresponden al día seleccionado.
+  const eventosDelDia = eventos.filter(e =>
+    aplicaFecha(e, diaSel, mes, anio)
+  );
 
   // ==========================================
   // CALCULAR DÍAS DEL MES ACTUAL
@@ -154,7 +330,11 @@ export default function CalendarioScreen() {
   const diasMes = (() => {
     const primerDia = (new Date(anio, mes, 1).getDay() + 6) % 7;
     const total = new Date(anio, mes + 1, 0).getDate();
-    return [...Array(primerDia).fill(null), ...Array.from({ length: total }, (_, i) => i + 1)];
+
+    return [
+      ...Array(primerDia).fill(null),
+      ...Array.from({ length: total }, (_, i) => i + 1),
+    ];
   })();
 
   // ==========================================
@@ -162,19 +342,57 @@ export default function CalendarioScreen() {
   // ==========================================
   // Se utiliza para seleccionar mes, año, hora y minuto.
 
-  const renderModalSelector = (tipo: string, titulo: string, data: any[], onSelect: (val: any) => void, fmt = (v: any) => v) => {
+  const renderModalSelector = (
+    tipo: string,
+    titulo: string,
+    data: any[],
+    onSelect: (val: any) => void,
+    fmt = (v: any) => v
+  ) => {
     const volverA = (tipo === 'hora' || tipo === 'minuto') ? 'nuevo' : null;
+
     return (
-      <Modal visible={modal === tipo} transparent animationType="fade" onRequestClose={() => setModal(volverA)}>
+      <Modal
+        visible={modal === tipo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModal(volverA)}
+      >
         <View style={s.overlay}>
-          <View style={[s.content, { maxHeight: '60%', backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={[s.modalTitle, { color: theme.text }]}>{titulo}</Text>
-            <FlatList data={data} keyExtractor={(i, idx) => idx.toString()} renderItem={({ item }) => (
-              <TouchableOpacity style={[s.item, { borderBottomColor: theme.cardBorder }]} onPress={() => { onSelect(item); setModal(volverA); }}>
-                <Text style={[s.itemText, { color: theme.text }]}>{fmt(item)}</Text>
-              </TouchableOpacity>
-            )} />
-            <TouchableOpacity style={[s.closeBtn, { backgroundColor: theme.danger }]} onPress={() => setModal(volverA)}>
+          <View style={[
+            s.content,
+            {
+              maxHeight: '60%',
+              backgroundColor: theme.card,
+              borderColor: theme.cardBorder,
+            },
+          ]}>
+            <Text style={[s.modalTitle, { color: theme.text }]}>
+              {titulo}
+            </Text>
+
+            <FlatList
+              data={data}
+              keyExtractor={(i, idx) => idx.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[s.item, { borderBottomColor: theme.cardBorder }]}
+                  onPress={() => {
+                    onSelect(item);
+                    setModal(volverA);
+                  }}
+                >
+                  <Text style={[s.itemText, { color: theme.text }]}>
+                    {fmt(item)}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+
+            <TouchableOpacity
+              style={[s.closeBtn, { backgroundColor: theme.danger }]}
+              onPress={() => setModal(volverA)}
+            >
               <Text style={s.closeText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
@@ -185,12 +403,20 @@ export default function CalendarioScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: theme.bg }]}>
+
       {/* ========================================== */}
       {/* ENCABEZADO DE LA PANTALLA */}
       {/* ========================================== */}
+
       <View style={s.header}>
         <TouchableOpacity
-          style={[s.backBtn, { backgroundColor: theme.backBg, borderColor: theme.backBorder }]}
+          style={[
+            s.backBtn,
+            {
+              backgroundColor: theme.backBg,
+              borderColor: theme.backBorder,
+            },
+          ]}
           onPress={() => router.back()}
         >
           <Ionicons name="arrow-back" size={26} color={theme.text} />
@@ -208,10 +434,15 @@ export default function CalendarioScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+
         {/* ========================================== */}
         {/* SELECTORES DE MES Y AÑO */}
         {/* ========================================== */}
+
         <View style={s.selectors}>
           <TouchableOpacity
             style={[s.selBtn, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
@@ -233,6 +464,7 @@ export default function CalendarioScreen() {
         {/* ========================================== */}
         {/* CABECERA DE DÍAS DE LA SEMANA */}
         {/* ========================================== */}
+
         <View style={s.row}>
           {DIAS_SEMANA.map((d, i) => (
             <Text key={i} style={[s.weekDay, { color: theme.text }]}>{d}</Text>
@@ -242,17 +474,24 @@ export default function CalendarioScreen() {
         {/* ========================================== */}
         {/* CUADRÍCULA DE DÍAS DEL MES */}
         {/* ========================================== */}
+
         <View style={[s.grid, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
           {diasMes.map((d, i) => {
             const ev = d ? eventos.find(e => aplicaFecha(e, d, mes, anio)) : null;
             const sel = d === diaSel;
+
             return (
               <TouchableOpacity
                 key={i}
                 style={[
                   s.cell,
                   !d && s.empty,
-                  ev && { backgroundColor: theme.hasEvBg, borderRadius: 10, borderWidth: 1.5, borderColor: theme.primary },
+                  ev && {
+                    backgroundColor: theme.hasEvBg,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: theme.primary,
+                  },
                   sel && { backgroundColor: theme.primary, borderRadius: 10 },
                 ]}
                 disabled={!d}
@@ -269,12 +508,10 @@ export default function CalendarioScreen() {
                     >
                       {d}
                     </Text>
+
                     {ev && (
                       <Text
-                        style={[
-                          s.miniEv,
-                          { color: sel ? '#FFFFFF' : theme.primary },
-                        ]}
+                        style={[s.miniEv, { color: sel ? '#FFFFFF' : theme.primary }]}
                         numberOfLines={1}
                       >
                         • {ev.nombre}
@@ -290,11 +527,10 @@ export default function CalendarioScreen() {
         {/* ========================================== */}
         {/* LISTA DE EVENTOS DEL DÍA SELECCIONADO */}
         {/* ========================================== */}
+
         <View style={{ marginTop: 22 }}>
           <View style={s.evHeader}>
-            <Text style={[s.evTitle, { color: theme.text }]}>
-              Eventos del {diaSel} de {MESES[mes]}
-            </Text>
+            <Text style={[s.evTitle, { color: theme.text }]}>Eventos del {diaSel} de {MESES[mes]}</Text>
             <TouchableOpacity
               style={[s.addBtn, { backgroundColor: theme.success }]}
               onPress={() => setModal('nuevo')}
@@ -315,23 +551,25 @@ export default function CalendarioScreen() {
             eventosDelDia.map(e => (
               <View
                 key={e.id}
-                style={[
-                  s.cardEv,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: theme.cardBorder,
-                    borderLeftColor: theme.primary,
-                  },
-                ]}
+                style={[s.cardEv, {
+                  backgroundColor: theme.card,
+                  borderColor: theme.cardBorder,
+                  borderLeftColor: theme.primary,
+                }]}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700' }}>
-                    {e.nombre}
-                  </Text>
+                  <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700' }}>{e.nombre}</Text>
                   <Text style={{ color: theme.subtext, fontSize: 16, marginTop: 4, fontWeight: '500' }}>
-                    🕒 {e.hora} hrs {e.repiteSiempre ? '• Todos los días' : e.repiteSemanal ? '• Cada semana' : e.repiteMensual ? '• Cada mes' : ''}
+                    🕒 {e.hora} hrs {e.repiteSiempre
+                      ? '• Todos los días'
+                      : e.repiteSemanal
+                        ? '• Cada semana'
+                        : e.repiteMensual
+                          ? '• Cada mes'
+                          : ''}
                   </Text>
                 </View>
+
                 <TouchableOpacity onPress={() => eliminarEvento(e.id)} style={{ padding: 6 }}>
                   <Ionicons name="trash" size={26} color={theme.danger} />
                 </TouchableOpacity>
@@ -344,66 +582,61 @@ export default function CalendarioScreen() {
       {/* ========================================== */}
       {/* MODAL PARA CREAR NUEVO EVENTO */}
       {/* ========================================== */}
-      <Modal visible={modal === 'nuevo'} transparent animationType="slide" onRequestClose={() => setModal(null)}>
+
+      <Modal
+        visible={modal === 'nuevo'}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModal(null)}
+      >
         <View style={s.overlay}>
           <View style={[s.content, { maxHeight: '92%', backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[s.modalTitle, { color: theme.text }]}>
-                Nuevo Evento ({diaSel} de {MESES[mes]})
-              </Text>
+              <Text style={[s.modalTitle, { color: theme.text }]}>Nuevo Evento ({diaSel} de {MESES[mes]})</Text>
 
               <Text style={[s.label, { color: theme.text }]}>Nombre del evento:</Text>
               <TextInput
-                style={[
-                  s.input,
-                  { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.cardBorder },
-                ]}
+                style={[s.input, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.cardBorder }]}
                 placeholder="Ej. Control médico, Reunión..."
                 placeholderTextColor={theme.subtext}
                 value={nombre}
                 onChangeText={setNombre}
               />
-              
+
               <Text style={[s.label, { color: theme.text }]}>Hora:</Text>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <TouchableOpacity
-                  style={[
-                    s.timeBtn,
-                    { flex: 1, marginRight: 8, backgroundColor: theme.inputBg, borderColor: theme.cardBorder },
-                  ]}
+                  style={[s.timeBtn, { flex: 1, marginRight: 8, backgroundColor: theme.inputBg, borderColor: theme.cardBorder }]}
                   onPress={() => setModal('hora')}
                 >
                   <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700' }}>{hora} hrs</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
-                  style={[
-                    s.timeBtn,
-                    { flex: 1, marginLeft: 8, backgroundColor: theme.inputBg, borderColor: theme.cardBorder },
-                  ]}
+                  style={[s.timeBtn, { flex: 1, marginLeft: 8, backgroundColor: theme.inputBg, borderColor: theme.cardBorder }]}
                   onPress={() => setModal('minuto')}
                 >
                   <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700' }}>{minuto} min</Text>
                 </TouchableOpacity>
               </View>
 
-              {[['Siempre', repSiemp, setRepSiemp], ['Semanal', repSem, setRepSem], ['Mensual', repMen, setRepMen]].map(([label, val, set]: any, idx) => (
+              {[
+                ['Siempre', repSiemp, setRepSiemp],
+                ['Semanal', repSem, setRepSem],
+                ['Mensual', repMen, setRepMen],
+              ].map(([label, val, set]: any, idx: number) => (
                 <View key={idx}>
                   <Text style={[s.label, { color: theme.text }]}>¿Repetir {label.toLowerCase()}?</Text>
                   <View style={{ flexDirection: 'row' }}>
                     <TouchableOpacity
-                      style={[
-                        s.repBtn,
-                        { backgroundColor: val ? theme.success : theme.inactiveBtn },
-                      ]}
+                      style={[s.repBtn, { backgroundColor: val ? theme.success : theme.inactiveBtn }]}
                       onPress={() => set(true)}
                     >
                       <Text style={[s.repText, { color: val ? '#FFFFFF' : theme.inactiveText }]}>Sí</Text>
                     </TouchableOpacity>
+
                     <TouchableOpacity
-                      style={[
-                        s.repBtn,
-                        { backgroundColor: !val ? theme.accentBlue : theme.inactiveBtn },
-                      ]}
+                      style={[s.repBtn, { backgroundColor: !val ? theme.accentBlue : theme.inactiveBtn }]}
                       onPress={() => set(false)}
                     >
                       <Text style={[s.repText, { color: !val ? '#FFFFFF' : theme.inactiveText }]}>No</Text>
@@ -413,16 +646,10 @@ export default function CalendarioScreen() {
               ))}
 
               <View style={{ flexDirection: 'row', marginTop: 24 }}>
-                <TouchableOpacity
-                  style={[s.actionBtn, { backgroundColor: theme.danger }]}
-                  onPress={() => setModal(null)}
-                >
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: theme.danger }]} onPress={() => setModal(null)}>
                   <Text style={s.actionBtnText}>Cancelar</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.actionBtn, { backgroundColor: theme.success }]}
-                  onPress={agregarEvento}
-                >
+                <TouchableOpacity style={[s.actionBtn, { backgroundColor: theme.success }]} onPress={agregarEvento}>
                   <Text style={s.actionBtnText}>Guardar</Text>
                 </TouchableOpacity>
               </View>
@@ -434,44 +661,47 @@ export default function CalendarioScreen() {
       {/* ========================================== */}
       {/* MODAL DE LISTA DE TODOS LOS EVENTOS */}
       {/* ========================================== */}
-      <Modal visible={modal === 'lista'} transparent animationType="slide" onRequestClose={() => setModal(null)}>
+
+      <Modal
+        visible={modal === 'lista'}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModal(null)}
+      >
         <View style={s.overlay}>
           <View style={[s.content, { maxHeight: '85%', backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
             <Text style={[s.modalTitle, { color: theme.text }]}>Todos los Eventos</Text>
+
             {eventos.length === 0 ? (
               <Text style={{ color: theme.text, textAlign: 'center', margin: 20, fontSize: 18 }}>
                 No hay eventos guardados.
               </Text>
             ) : (
-              <FlatList data={eventos} keyExtractor={i => i.id} renderItem={({ item }) => (
-                <View
-                  style={[
-                    s.cardEv,
-                    {
-                      backgroundColor: theme.inputBg,
-                      borderColor: theme.cardBorder,
-                      borderLeftColor: theme.primary,
-                    },
-                  ]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.text, fontSize: 19, fontWeight: '700' }}>
-                      {item.nombre}
-                    </Text>
-                    <Text style={{ color: theme.subtext, fontSize: 15, marginTop: 4, fontWeight: '500' }}>
-                      📅 {item.dia} de {MESES[item.mes]} {item.anio} • 🕒 {item.hora} hrs
-                    </Text>
+              <FlatList
+                data={eventos}
+                keyExtractor={i => i.id}
+                renderItem={({ item }) => (
+                  <View style={[s.cardEv, {
+                    backgroundColor: theme.inputBg,
+                    borderColor: theme.cardBorder,
+                    borderLeftColor: theme.primary,
+                  }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: theme.text, fontSize: 19, fontWeight: '700' }}>{item.nombre}</Text>
+                      <Text style={{ color: theme.subtext, fontSize: 15, marginTop: 4, fontWeight: '500' }}>
+                        📅 {item.dia} de {MESES[item.mes]} {item.anio} • 🕒 {item.hora} hrs
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity onPress={() => eliminarEvento(item.id)} style={{ padding: 6 }}>
+                      <Ionicons name="trash" size={26} color={theme.danger} />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity onPress={() => eliminarEvento(item.id)} style={{ padding: 6 }}>
-                    <Ionicons name="trash" size={26} color={theme.danger} />
-                  </TouchableOpacity>
-                </View>
-              )} />
+                )}
+              />
             )}
-            <TouchableOpacity
-              style={[s.closeBtn, { backgroundColor: theme.primary }]}
-              onPress={() => setModal(null)}
-            >
+
+            <TouchableOpacity style={[s.closeBtn, { backgroundColor: theme.primary }]} onPress={() => setModal(null)}>
               <Text style={s.closeText}>Cerrar</Text>
             </TouchableOpacity>
           </View>
@@ -481,10 +711,12 @@ export default function CalendarioScreen() {
       {/* ========================================== */}
       {/* SELECTORES DESPLEGABLES (MES, AÑO, HORA, MINUTO) */}
       {/* ========================================== */}
+
       {renderModalSelector('mes', 'Selecciona un Mes', MESES, (i) => setMes(MESES.indexOf(i)))}
       {renderModalSelector('anio', 'Selecciona un Año', ANIOS, setAnio)}
       {renderModalSelector('hora', 'Selecciona la Hora', HORAS, setHora, h => `${h} hrs`)}
       {renderModalSelector('minuto', 'Selecciona el Minuto', MINUTOS, setMinuto, m => `${m} min`)}
+
     </SafeAreaView>
   );
 }
@@ -510,11 +742,7 @@ const s = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
   },
-  backBtnText: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginLeft: 6,
-  },
+  backBtnText: { fontSize: 17, fontWeight: '700', marginLeft: 6 },
   title: { fontSize: 24, fontWeight: '800' },
   listBtn: {
     flexDirection: 'row',
@@ -523,12 +751,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
   },
-  listBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    marginLeft: 6,
-  },
+  listBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginLeft: 6 },
   scroll: { paddingBottom: 30, paddingHorizontal: 16 },
   selectors: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 14 },
   selBtn: {
@@ -544,41 +767,17 @@ const s = StyleSheet.create({
   selText: { fontSize: 19, fontWeight: '700' },
   row: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
   weekDay: { fontSize: 16, fontWeight: '800', width: '14%', textAlign: 'center' },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 8,
-  },
-  cell: {
-    width: '14.28%',
-    height: 64,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', borderRadius: 16, borderWidth: 1.5, padding: 8 },
+  cell: { width: '14.28%', height: 64, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   empty: { backgroundColor: 'transparent' },
   dayText: { fontSize: 17, fontWeight: '600' },
   selDayText: { fontWeight: '800' },
   miniEv: { fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 2 },
   evHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   evTitle: { fontSize: 20, fontWeight: '800', flex: 1, marginRight: 8 },
-  addBtn: {
-    flexDirection: 'row',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
+  addBtn: { flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
   addBtnText: { color: '#FFF', marginLeft: 6, fontSize: 17, fontWeight: '700' },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 18,
-    borderRadius: 16,
-    borderWidth: 1.5,
-  },
+  card: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16, borderWidth: 1.5 },
   cardEv: {
     flexDirection: 'row',
     alignItems: 'center',
