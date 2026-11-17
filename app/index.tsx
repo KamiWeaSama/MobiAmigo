@@ -14,6 +14,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 
 import { useCallback, useState } from 'react';
 
+import { signOut } from 'firebase/auth';
+
 import {
 
   Alert,
@@ -1135,6 +1137,54 @@ export default function App() {
       console.log('Error al guardar estado del tutorial:', error);
     }
   };
+
+  // ==========================================
+// CERRAR SESIÓN Y VOLVER AL LOGIN
+// ==========================================
+
+const cerrarSesion = () => {
+
+  Alert.alert(
+    'Cerrar sesión',
+    '¿Estás seguro de que deseas volver al inicio de sesión?',
+    [
+      {
+        text: 'Cancelar',
+        style: 'cancel',
+      },
+      {
+        text: 'Cerrar sesión',
+        style: 'destructive',
+        onPress: async () => {
+
+          try {
+
+            // Cerrar el menú
+            setMenuAbierto(false);
+
+            // Cerrar sesión de Firebase
+            await signOut(auth);
+
+            // Volver a la pantalla de login
+            router.replace('/login');
+
+          } catch (error) {
+
+            console.log('Error al cerrar sesión:', error);
+
+            Alert.alert(
+              'Error',
+              'No se pudo cerrar la sesión. Inténtalo nuevamente.'
+            );
+
+          }
+
+        },
+      },
+    ]
+  );
+
+};
 
   // ==========================================
 
@@ -2391,6 +2441,53 @@ return (
               <Ionicons name="chevron-forward" size={22} color={theme.subtext} />
 
             </TouchableOpacity>
+            
+            {/* Opción 3: Cerrar sesión y volver al login */}
+
+<TouchableOpacity
+
+  style={[
+    styles.tarjetaOpcionMenu,
+    {
+      backgroundColor: theme.sectionBg,
+      borderColor: theme.cardBorder,
+    },
+  ]}
+
+  onPress={cerrarSesion}
+
+>
+
+  <View
+    style={[
+      styles.iconoCirculoMenu,
+      { backgroundColor: theme.danger },
+    ]}
+  >
+
+    <Ionicons name="log-out" size={26} color="#FFFFFF" />
+
+  </View>
+
+  <View style={{ flex: 1 }}>
+
+    <Text style={[styles.textoOpcionMenu, { color: theme.text }]}>
+
+      Cerrar sesión
+
+    </Text>
+
+    <Text style={[styles.subtextoOpcionMenu, { color: theme.subtext }]}>
+
+      Volver a la pantalla de inicio de sesión
+
+    </Text>
+
+  </View>
+
+  <Ionicons name="chevron-forward" size={22} color={theme.subtext} />
+
+</TouchableOpacity>
 
           </Pressable>
 

@@ -2,17 +2,17 @@
 import React, { useState } from 'react';
 
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useColorScheme,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
+  View,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -21,9 +21,9 @@ import { useRouter } from 'expo-router';
 
 // Importar las funciones de autenticación de Firebase
 import {
-    isValidRut,
-    loginGuest,
-    loginUser,
+  isValidRut,
+  loginGuest,
+  loginUser,
 } from '../services/authService';
 
 export default function LoginScreen() {
@@ -67,6 +67,27 @@ export default function LoginScreen() {
   // Controlar el estado de carga
   const [loading, setLoading] = useState(false);
   const [operation, setOperation] = useState('');
+
+  // ==========================================
+// CONFIRMAR INGRESO COMO INVITADO
+// ==========================================
+
+const confirmarIngresoInvitado = () => {
+  Alert.alert(
+  'Ingresar sin registrarse',
+  'Estás a punto de ingresar como invitado. Ten en cuenta que, al no tener una cuenta registrada, no podrás transferir ni recuperar tus configuraciones y datos en otro dispositivo. ¿Deseas continuar?',
+  [
+    {
+      text: 'Cancelar',
+      style: 'cancel',
+    },
+    {
+      text: 'Continuar',
+      onPress: handleGuestLogin,
+    },
+  ]
+);
+};
 
   // ==========================================
   // INICIAR SESIÓN CON RUT Y CONTRASEÑA
@@ -410,7 +431,7 @@ export default function LoginScreen() {
               { backgroundColor: theme.btnGuest },
               loading && styles.botonDeshabilitado
             ]}
-            onPress={handleGuestLogin}
+            onPress={confirmarIngresoInvitado}
             disabled={loading}
             activeOpacity={0.8}
           >
